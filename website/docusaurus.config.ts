@@ -1,7 +1,5 @@
 import type { Config } from "@docusaurus/types";
 
-declare const require: (NodeJS.Require & { resolveWeak?: unknown }) | undefined;
-
 if (
   typeof (Function.prototype as { resolveWeak?: unknown }).resolveWeak !==
   "function"
@@ -12,10 +10,6 @@ if (
   });
 }
 
-if (typeof require !== "undefined") {
-  require.extensions[".css"] = () => undefined;
-}
-
 const config: Config = {
   title: "forkhammer",
   tagline: "Validate Jira issues and spawn OpenCode worktrees",
@@ -24,6 +18,14 @@ const config: Config = {
   baseUrl: process.env.BASE_URL ?? "/forkhammer/",
   organizationName: process.env.GITHUB_OWNER ?? "your-org",
   projectName: process.env.GITHUB_REPO ?? "forkhammer",
+  headTags: [
+    {
+      tagName: "script",
+      attributes: {},
+      innerHTML:
+        "globalThis.require = globalThis.require || function require() { return {}; }; globalThis.require.resolveWeak = globalThis.require.resolveWeak || function resolveWeak() { return 0; };",
+    },
+  ],
   onBrokenLinks: "warn",
   onBrokenMarkdownLinks: "warn",
   i18n: {
