@@ -1,0 +1,22 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Forkhammer social card">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1280" y2="640" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="360" y1="140" x2="920" y2="520" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#55c56a"/>
+      <stop offset="1" stop-color="#1f8a47"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="640" rx="48" fill="url(#bg)"/>
+  <circle cx="960" cy="160" r="108" fill="#17301f"/>
+  <circle cx="960" cy="160" r="64" fill="#55c56a" opacity="0.18"/>
+  <path d="M356 424c44-90 100-144 178-172 63-23 134-27 214-12-18 23-37 39-56 49 26 13 45 31 57 54-34 8-61 18-81 31 18 25 27 52 27 81-35 2-69-6-101-22-32 30-70 51-114 61-37 9-73 7-109-6z" fill="url(#accent)"/>
+  <path d="M618 250c26-22 54-35 86-40-15 18-31 31-48 39" fill="none" stroke="#e8ffe9" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M430 470c34-24 74-42 119-54" fill="none" stroke="#f59e0b" stroke-width="14" stroke-linecap="round"/>
+  <path d="M816 480c-44-10-79-29-104-58" fill="none" stroke="#d8ffe0" stroke-width="12" stroke-linecap="round" stroke-dasharray="1 18"/>
+  <text x="96" y="126" fill="#e8ffe9" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700" letter-spacing="3">FORKHAMMER</text>
+  <text x="96" y="206" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="72" font-weight="800">Dragons. Forks. Hammers.</text>
+  <text x="96" y="262" fill="#cbd5e1" font-family="Inter, Arial, sans-serif" font-size="28">Ticket-driven worktrees and focused OpenCode sessions.</text>
+</svg>
