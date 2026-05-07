@@ -7,7 +7,7 @@ import type * as Preset from "@docusaurus/preset-classic";
 const siteUrl = process.env.SITE_URL ?? "https://narudesu.github.io";
 const baseUrl = process.env.BASE_URL ?? "";
 const organizationName = process.env.GITHUB_ORG ?? "narudesu";
-const projectName = process.env.GITHUB_REPO ?? "forgehammer";
+const projectName = process.env.GITHUB_REPO ?? "forkhammer";
 const repoUrl = `https://github.com/${organizationName}/${projectName}`;
 
 const config: Config = {
