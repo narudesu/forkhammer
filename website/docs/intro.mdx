@@ -1,0 +1,23 @@
+---
+sidebar_position: 1
+---
+
+# forkhammer
+
+`forkhammer` is a CLI for validating Jira issues against a local codebase and launching an OpenCode session in a dedicated git worktree.
+
+## Quick start
+
+Run:
+
+```bash
+forkhammer new -k AT-123
+```
+
+This command fetches issue context, resolves the target project, creates a worktree, and opens an OpenCode session focused on the ticket.
+
+## What to read next
+
+- `forkhammer new` for command behavior and expected flow.
+- `Configuration` for `~/.config/forkhammer/config.toml` setup.
+- `OpenCode Docker stack` for local server setup and fixed path requirements.

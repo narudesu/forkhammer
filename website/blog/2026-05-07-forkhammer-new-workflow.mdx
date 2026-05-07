@@ -1,0 +1,25 @@
+---
+slug: forkhammer-new-workflow
+title: Using forkhammer new for issue validation
+description: A practical example of the forkhammer workflow from Jira issue to OpenCode session.
+---
+
+`forkhammer` is a CLI that validates Jira issues against a codebase and starts an OpenCode session in a dedicated worktree.
+
+{/* truncate */}
+
+Here is the basic command:
+
+```bash
+forkhammer new -k AT-123
+```
+
+What happens after you run it:
+
+1. The CLI loads your local config from `~/.config/forkhammer/config.toml`.
+2. It reads the Jira issue and extracts relevant context.
+3. It resolves the project root from your configured project mappings.
+4. It creates a worktree and opens a new OpenCode session.
+5. It asks the agent to validate the issue against the repository.
+
+This keeps issue analysis isolated per task and makes it easier to track work from ticket to implementation.

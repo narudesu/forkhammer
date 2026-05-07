@@ -34,6 +34,8 @@ jobs:
         env:
           SITE_URL: https://${{ github.repository_owner }}.github.io
           BASE_URL: /${{ github.event.repository.name }}/
+          GITHUB_ORG: ${{ github.repository_owner }}
+          GITHUB_REPO: ${{ github.event.repository.name }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: website/build

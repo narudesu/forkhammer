@@ -1,0 +1,15 @@
+---
+sidebar_position: 4
+---
+
+# OpenCode Docker stack
+
+This repo includes a fixed-path Docker Compose stack in `tools/oc-docker/` for running the OpenCode server locally.
+
+## Important constraint
+
+The stack is intentionally path-specific to `/home/naru/code/opencode`. Do not normalize or rewrite those paths.
+
+## Purpose
+
+Use this stack when you need a consistent local OpenCode server endpoint for `forkhammer new` workflows.
