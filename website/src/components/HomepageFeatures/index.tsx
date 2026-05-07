@@ -1,18 +1,18 @@
-import type { ReactNode } from "react";
-import clsx from "clsx";
 import Heading from "@theme/Heading";
+import clsx from "clsx";
+import type { ReactNode } from "react";
 import styles from "./styles.module.css";
 
 type FeatureItem = {
   title: string;
-  Svg: React.ComponentType<React.ComponentProps<"svg">>;
+  image: string;
   description: ReactNode;
 };
 
 const FeatureList: FeatureItem[] = [
   {
     title: "Ticket-Driven Workflow",
-    Svg: require("@site/static/img/undraw_docusaurus_mountain.svg").default,
+    image: require("@site/static/img/ticket-workflow.png").default,
     description: (
       <>
         Start from a Jira key and let forkhammer prepare a focused workspace for
@@ -22,7 +22,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: "Isolated Worktrees",
-    Svg: require("@site/static/img/undraw_docusaurus_tree.svg").default,
+    image: require("@site/static/img/isolated-worktrees.png").default,
     description: (
       <>
         Each task runs in its own git worktree so issue validation and code
@@ -32,7 +32,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: "OpenCode Ready",
-    Svg: require("@site/static/img/undraw_docusaurus_react.svg").default,
+    image: require("@site/static/img/opencode-ready.png").default,
     description: (
       <>
         forkhammer integrates with a local OpenCode server to launch sessions
@@ -42,11 +42,11 @@ const FeatureList: FeatureItem[] = [
   },
 ];
 
-function Feature({ title, Svg, description }: FeatureItem) {
+function Feature({ title, image, description }: FeatureItem) {
   return (
     <div className={clsx("col col--4")}>
-      <div className="text--center">
-        <Svg className={styles.featureSvg} role="img" />
+      <div className="text--center" style={{ marginBottom: 24 }}>
+        <img src={image} alt={title} width={128} height={128} />
       </div>
       <div className="text--center padding-horiz--md">
         <Heading as="h3">{title}</Heading>

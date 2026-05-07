@@ -4,11 +4,10 @@ import type * as Preset from "@docusaurus/preset-classic";
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
-const siteUrl =
-  process.env.SITE_URL ?? "https://your-docusaurus-site.example.com";
-const baseUrl = process.env.BASE_URL ?? "/";
-const organizationName = process.env.GITHUB_ORG ?? "facebook";
-const projectName = process.env.GITHUB_REPO ?? "docusaurus";
+const siteUrl = process.env.SITE_URL ?? "https://narudesu.github.io";
+const baseUrl = process.env.BASE_URL ?? "";
+const organizationName = process.env.GITHUB_ORG ?? "narudesu";
+const projectName = process.env.GITHUB_REPO ?? "hammersmith";
 const repoUrl = `https://github.com/${organizationName}/${projectName}`;
 
 const config: Config = {
@@ -48,10 +47,6 @@ const config: Config = {
       {
         docs: {
           sidebarPath: "./sidebars.ts",
-          // Please change this to your repo.
-          // Remove this to remove the "edit this page" links.
-          editUrl:
-            "https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/",
         },
         blog: {
           showReadingTime: true,
@@ -59,11 +54,6 @@ const config: Config = {
             type: ["rss", "atom"],
             xslt: true,
           },
-          // Please change this to your repo.
-          // Remove this to remove the "edit this page" links.
-          editUrl:
-            "https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/",
-          // Useful options to enforce blogging best practices
           onInlineTags: "warn",
           onInlineAuthors: "warn",
           onUntruncatedBlogPosts: "warn",
@@ -77,16 +67,12 @@ const config: Config = {
 
   themeConfig: {
     // Replace with your project's social card
-    image: "img/docusaurus-social-card.jpg",
+    image: "img/social-card.svg",
     colorMode: {
       respectPrefersColorScheme: true,
     },
     navbar: {
       title: "forkhammer",
-      logo: {
-        alt: "forkhammer logo",
-        src: "img/logo.svg",
-      },
       items: [
         {
           type: "docSidebar",
