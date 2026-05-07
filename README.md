@@ -1,5 +1,7 @@
 # forkhammer
 
+![forkhammer](./forkhammer.png)
+
 Validate Jira issues and create OpenCode worktrees.
 
 ## CLI

@@ -7,11 +7,11 @@
   "scripts": {
     "build": "bun run build:cli && bun run build:docs",
     "build:cli": "bun build ./src/cli.ts --outfile ./dist/forkhammer --target bun",
-    "build:docs": "NODE_OPTIONS=--experimental-loader=./scripts/css-loader.mjs bunx docusaurus build website",
+    "build:docs": "node --require ./scripts/css-hook.cjs --import \"data:text/javascript,import { register } from \\\"node:module\\\"; import { pathToFileURL } from \\\"node:url\\\"; register(\\\"./scripts/css-loader.mjs\\\", pathToFileURL(\\\"./\\\"));\" ./node_modules/@docusaurus/core/bin/docusaurus.mjs build website",
     "postinstall": "bun ./scripts/postinstall.mjs",
     "dev": "bun run ./src/cli.ts",
-    "docs:start": "NODE_OPTIONS=--experimental-loader=./scripts/css-loader.mjs bunx docusaurus start website",
-    "docs:build": "NODE_OPTIONS=--experimental-loader=./scripts/css-loader.mjs bunx docusaurus build website",
+    "docs:start": "node --require ./scripts/css-hook.cjs --import \"data:text/javascript,import { register } from \\\"node:module\\\"; import { pathToFileURL } from \\\"node:url\\\"; register(\\\"./scripts/css-loader.mjs\\\", pathToFileURL(\\\"./\\\"));\" ./node_modules/@docusaurus/core/bin/docusaurus.mjs start website",
+    "docs:build": "node --require ./scripts/css-hook.cjs --import \"data:text/javascript,import { register } from \\\"node:module\\\"; import { pathToFileURL } from \\\"node:url\\\"; register(\\\"./scripts/css-loader.mjs\\\", pathToFileURL(\\\"./\\\"));\" ./node_modules/@docusaurus/core/bin/docusaurus.mjs build website",
     "format": "biome format --write .",
     "format:check": "biome format ."
   },
