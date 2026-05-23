@@ -1,5 +1,5 @@
 ---
-sidebar_position: 3
+sidebar_position: 4
 ---
 
 # Configuration
@@ -10,12 +10,24 @@ Forkhammer reads local configuration from:
 ~/.config/forkhammer/config.toml
 ```
 
-## Expected settings
+## Config structure
 
-- Jira connection details for issue lookup.
-- Project mappings used to resolve a ticket to a local repo path.
-- Any defaults used when initializing an OpenCode session.
+```toml
+[opencode]
+default_provider_id = "openai"
+default_model_id = "gpt-5.4-mini"
 
-## Path sensitivity
+[jira]
+url = "https://your-jira-instance.atlassian.net"
+auth = "email@example.com:api_token"
 
-Project root values are path-sensitive. Keep configured paths exactly aligned with your local checkout locations.
+[project.api]
+key = "KEY"
+root = "/home/you/code/opencode/your-repo"
+
+[supabase]
+url = "https://<project-ref>.supabase.co"
+anon_key = "<anon-key>"
+secret_string = "<raw-cli-secret-string>"
+table = "ultrafeed_item"
+```

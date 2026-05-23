@@ -1,16 +1,15 @@
 import { createOpencodeClient } from "@opencode-ai/sdk/v2";
 import chalk from "chalk";
-import { Command } from "commander";
-import path from "node:path";
 import { execa } from "execa";
+import path from "node:path";
 import { loadConfig, type Config } from "../config";
 import { formatIssueContext, getIssueContext } from "../jira";
 import { unwrapOpencodeData } from "../opencode";
-
-type Args = {
-  key: string;
-  project?: string;
-};
+import {
+  validationStructuredResultSchema,
+  type UltrafeedEventData,
+  type ValidationStructuredResult,
+} from "../worker/events";
 
 type ResolvedProject = {
   name: string;
@@ -23,12 +22,31 @@ type ResolvedWorktree = {
   directory: string;
 };
 
-type ValidateIssueStructuredResult = {
-  questions: { text: string; relatedFilePath: string }[];
-  summary: string;
-  todos: string[];
-  relatedFiles: { path: string; note: string }[];
-  clarity: number;
+type ModelConfig = {
+  providerID: string;
+  modelID: string;
+};
+
+type ValidationEventHooks = {
+  onStarted?: (
+    payload: UltrafeedEventData<"validate_issue_started">,
+  ) => Promise<void> | void;
+  onSucceeded?: (
+    payload: UltrafeedEventData<"issue_validated">,
+  ) => Promise<void> | void;
+  onFailed?: (
+    payload: UltrafeedEventData<"issue_validation_failed">,
+  ) => Promise<void> | void;
+};
+
+type ValidationRunResult = {
+  issueKey: string;
+  projectKey: string;
+  projectName: string;
+  jiraSummary: string;
+  sessionId: string;
+  worktreeDirectory: string;
+  result: ValidationStructuredResult;
 };
 
 const VALIDATION_RESPONSE_FORMAT = {
@@ -73,62 +91,100 @@ const VALIDATION_RESPONSE_FORMAT = {
   },
 };
 
-export function commandNew(program: Command) {
-  program
-    .command("new")
-    .description(
-      "Validate a Jira issue and create an OpenCode worktree session",
-    )
-    .requiredOption("-k, --key <key>", "Issue key")
-    .option("-p, --project <project>", "Configured project key/name override")
-    .action(async (args: Args) => {
-      const config = await loadConfig();
-      const project = resolveProject(config, args.key, args.project);
-      const gitRoot = await resolveGitRoot(project.root, process.cwd());
+export async function runIssueValidation(input: {
+  key: string;
+  project?: string;
+  streamEvents?: boolean;
+  hooks?: ValidationEventHooks;
+}): Promise<ValidationRunResult> {
+  let issueKey = input.key;
 
-      console.log(chalk.blue("-- fetch jira context --"));
-      const issue = await getIssueContext(config, args.key);
-      const context = formatIssueContext(issue);
+  try {
+    const config = await loadConfig();
+    const model = resolveDefaultModel(config);
+    const project = resolveProject(config, input.key, input.project);
+    const gitRoot = await resolveGitRoot(project.root, process.cwd());
 
-      console.log(chalk.blue("-- create worktree --"));
-      const rootClient = createOpencodeClient({
-        baseUrl: "http://localhost:8000",
-        directory: gitRoot,
-      });
-      const worktree = await createOrGetWorktree(rootClient, issue.key);
+    const issue = await getIssueContext(config, input.key);
+    issueKey = issue.key;
+    const context = formatIssueContext(issue);
 
-      console.log(chalk.blue("-- create opencode session --"));
-      const worktreeClient = createOpencodeClient({
-        baseUrl: "http://localhost:8000",
-        directory: worktree.directory,
-      });
-      const session = await worktreeClient.session
-        .create({
-          directory: worktree.directory,
-          title: `${issue.key} - ${issue.summary}`,
-        })
-        .then(unwrapOpencodeData);
-
-      console.log(chalk.blue("-- prompt agent --"));
-      const controller = new AbortController();
-      const eventLoop = streamSessionEvents(worktreeClient, controller.signal);
-
-      const result = await promptValidationSession(worktreeClient, {
-        sessionId: session.id,
-        context,
-      });
-
-      controller.abort();
-      await eventLoop;
-
-      const structured = result.info
-        .structured as ValidateIssueStructuredResult;
-      printValidationResult(structured, worktree.directory);
-
-      console.log(
-        `Created OpenCode session ${chalk.green(session.id)} for ${chalk.green(project.name)} (${chalk.gray(project.root)})`,
-      );
+    await input.hooks?.onStarted?.({
+      issue_key: issue.key,
+      issue_summary: issue.summary,
+      jira_description: issue.description,
+      issue_comments: issue.comments,
     });
+
+    const rootClient = createOpencodeClient({
+      baseUrl: "http://localhost:8000",
+      directory: gitRoot,
+    });
+    const worktree = await createOrGetWorktree(rootClient, issue.key);
+
+    const worktreeClient = createOpencodeClient({
+      baseUrl: "http://localhost:8000",
+      directory: worktree.directory,
+    });
+    const session = await worktreeClient.session
+      .create({
+        directory: worktree.directory,
+        title: `${issue.key} - ${issue.summary}`,
+      })
+      .then(unwrapOpencodeData);
+
+    const controller = new AbortController();
+    const eventLoop = input.streamEvents
+      ? streamSessionEvents(worktreeClient, controller.signal)
+      : Promise.resolve();
+
+    const result = await promptValidationSession(worktreeClient, {
+      sessionId: session.id,
+      context,
+      model,
+    });
+
+    controller.abort();
+    await eventLoop;
+
+    const structured = extractValidationResult(result);
+
+    await input.hooks?.onSucceeded?.({
+      issue_key: issue.key,
+      source: "naru-cli",
+      command: "validate-issue",
+      project_key: project.key,
+      project_name: project.name,
+      jira_summary: issue.summary,
+      ...structured,
+    });
+
+    if (input.streamEvents) {
+      printValidationResult(structured, worktree.directory);
+    }
+
+    console.log(
+      `Created OpenCode session ${chalk.green(session.id)} for ${chalk.green(project.name)} (${chalk.gray(project.root)})`,
+    );
+
+    return {
+      issueKey: issue.key,
+      projectKey: project.key,
+      projectName: project.name,
+      jiraSummary: issue.summary,
+      sessionId: session.id,
+      worktreeDirectory: worktree.directory,
+      result: structured,
+    };
+  } catch (error) {
+    await Promise.resolve(
+      input.hooks?.onFailed?.({
+        issue_key: issueKey,
+        error: toErrorMessage(error),
+      }),
+    ).catch(() => {});
+    throw error;
+  }
 }
 
 async function resolveGitRoot(
@@ -322,16 +378,16 @@ async function streamSessionEvents(
 
 async function promptValidationSession(
   client: ReturnType<typeof createOpencodeClient>,
-  input: { sessionId: string; context: string },
+  input: { sessionId: string; context: string; model: ModelConfig },
 ) {
   return client.session
     .prompt({
       sessionID: input.sessionId,
-      format: VALIDATION_RESPONSE_FORMAT,
-      model: {
-        modelID: "gpt-5.4-mini",
-        providerID: "openai",
+      tools: {
+        question: false,
       },
+      format: VALIDATION_RESPONSE_FORMAT,
+      model: input.model,
       agent: "plan",
       parts: [
         {
@@ -343,8 +399,15 @@ async function promptValidationSession(
     .then(unwrapOpencodeData);
 }
 
+function resolveDefaultModel(config: Config): ModelConfig {
+  return {
+    providerID: config.opencode?.default_provider_id ?? "openai",
+    modelID: config.opencode?.default_model_id ?? "gpt-5.4-mini",
+  };
+}
+
 function printValidationResult(
-  structured: ValidateIssueStructuredResult,
+  structured: ValidationStructuredResult,
   worktreeDirectory: string,
 ) {
   console.log(chalk.green("\nClarity:"));
@@ -380,12 +443,65 @@ function buildValidationPrompt(context: string) {
 ### Instructions
 - Validate this Jira issue against the current codebase.
 - Prepare an implementation plan if the Jira context is clear enough.
-- If anything required to implement the issue is unclear, ask focused questions instead of guessing.
-
-### Output
-- just before calling the structured output tool, please also present the same information to the user, using the same format as the structured output (lists with section titles)
+- If anything required to implement the issue is unclear, ask focused questions instead of guessing in the form of structured output questions.
 
 ### Jira Context
 
 ${context}`;
+}
+
+function extractValidationResult(result: unknown): ValidationStructuredResult {
+  const record =
+    result && typeof result === "object"
+      ? (result as Record<string, unknown>)
+      : null;
+
+  const info =
+    record?.info && typeof record.info === "object"
+      ? (record.info as Record<string, unknown>)
+      : null;
+
+  const structuredCandidate =
+    info?.structured ?? record?.structured ?? parseStructuredFromParts(record);
+
+  const parsed =
+    validationStructuredResultSchema.safeParse(structuredCandidate);
+  if (!parsed.success) {
+    throw new Error("validation-structured-output-missing");
+  }
+
+  return parsed.data;
+}
+
+function parseStructuredFromParts(
+  record: Record<string, unknown> | null,
+): unknown {
+  const parts = Array.isArray(record?.parts) ? record.parts : null;
+  if (!parts) {
+    return null;
+  }
+
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const part = parts[index];
+    if (!part || typeof part !== "object") {
+      continue;
+    }
+
+    const candidate = part as Record<string, unknown>;
+    if (candidate.type !== "text" || typeof candidate.text !== "string") {
+      continue;
+    }
+
+    try {
+      return JSON.parse(candidate.text);
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+function toErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }

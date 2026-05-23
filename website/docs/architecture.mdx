@@ -1,0 +1,85 @@
+---
+sidebar_position: 4
+---
+
+# Architecture
+
+Forkhammer uses an event-sourced design.
+
+That means it does not try to keep one mutable "current state" object for everything. Instead, it records important changes as events, then rebuilds state from those events when it needs to.
+
+## The basic flow
+
+```text
+Jira issue
+    |
+    v
+validate_issue_requested event
+    |
+    v
+worker reads the event
+    |
+    +--> loads Jira context
+    +--> opens an OpenCode session in a worktree
+    |
+    v
+worker emits result events
+    |
+    +--> validate_issue_started
+    +--> issue_validated
+    +--> issue_validation_failed
+    |
+    v
+projections rebuild readable state
+```
+
+In simple terms:
+
+- The event log is the source of truth.
+- The worker is the process that reacts to new events.
+- A projection is a read-friendly view built from those events.
+
+## Why this helps
+
+Event sourcing gives Forkhammer a few practical advantages:
+
+- You get a clear history of what happened.
+- You can replay events to rebuild state after a bug or restart.
+- Different parts of the system can react to the same event stream without tightly coupling to each other.
+- It is easier to debug because you can reproduce every state the system has been in.
+
+## Building the state
+
+When Forkhammer starts, it does not begin from zero.
+
+It loads stored snapshots, replays older events that were not yet folded into those snapshots, and then listens for live inserts.
+
+```python
+state = load_snapshot()
+
+for event in load_backfill_events():
+    state = apply(event, state)
+
+while True:
+    event = wait_for_next_event()
+    state = apply(event, state)
+```
+
+That replay step is what makes the system resilient. If a reducer changes, or a worker restarts, Forkhammer can rebuild the derived view from the same event history.
+
+## Projections
+
+A projection is a read model built from events.
+
+For example, one projection might track validation progress, while another counts messages or stores the last known status for an issue. The raw events stay in the log, but the projection makes it cheaper to answer everyday questions.
+
+```python
+for event in events:
+    validation_store.reduce(event)
+    message_counter.reduce(event)
+```
+
+## Side Effects
+
+After a projection is up-to-date, we run side effects such as creating a new opencode session.
+

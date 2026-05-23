@@ -2,22 +2,83 @@
 sidebar_position: 1
 ---
 
-# forkhammer
+# Introduction
 
-`forkhammer` is a CLI for validating Jira issues against a local codebase and launching an OpenCode session in a dedicated git worktree.
+Forkhammer is a tool that helps you work on your tasks in parallel.
 
-## Quick start
+The primary usecase is creating a new isolated worktree for each Jira ticket.
 
-Run:
+### Here's how it works
 
-```bash
-forkhammer new -k AT-123
-```
+You select some tickets you want to work on.
 
-This command fetches issue context, resolves the target project, creates a worktree, and opens an OpenCode session focused on the ticket.
+Forkhammer uses Jira API to fetch the ticket data.
 
-## What to read next
+Forkhammer asks the Plan agent to:
+  - validate the issue against the codebase
+  - find relevant files
+  - prepare an implementation plan
+  - determine the clarity (0-10) of the ticket
+  - ask questions to clarify the scope
 
-- `forkhammer new` for command behavior and expected flow.
-- `Configuration` for `~/.config/forkhammer/config.toml` setup.
-- `OpenCode Docker stack` for local server setup and fixed path requirements.
+The AI outputs a structured report which is saved to the event log.
+
+You can review the report and decide what to do next:
+
+**High Clarity**
+
+Awesome news, the ticket is specified really well and you can  switch to the Build agent in OpenCode and let it implement and then review the result.
+
+**Some Questions**
+
+You can enter the OpenCode session and answer the questions to improve the clarity of the work.
+
+After a few rounds of answering questions, you are ready to let the Build agent implement.
+
+**Low Clarity**
+
+It can happen. The task is too complex or specified in an unclear way.
+
+In this case, you might want to look at the related files the agent found and prepare a more complete implementation plan or implement the task manually.
+
+Either way, you still benefit from the initial analysis and a ready-to-use worktree.
+
+### Overview of features
+
+Here's an overview of features we aim to provide:
+
+**Jira ticket input**
+
+You don't need to copy what has already been specified in Jira.
+
+Many simple well-specified tasks can be implemented directly. 
+
+Making simple tasks and bugfixes more manageable allows you to keep your energy for more complex work.
+
+**OpenCode running isolated in a Docker container**
+
+The AI agent only has access to the mounted volumes inside of the docker container and you don't need to worry about it deciding to delete your system.
+
+**You host your worker anywhere you like - on your laptop or on a VPS**
+
+Hosting on your laptop allows you to intervene manually easily because the mounted volumes are also accessible on your filesystem.
+
+Hosting on a VPS might be nice if you want to access the worker even when your laptop is not running.
+
+**You can bring your own database**
+
+Forkhammer currently uses Supabase as the realtime event store. The configuration allows you to configure your supabase.
+
+**Decoupled Worker + Work on the go**
+
+You can work from your tablet, phone or Hermes agent or other UI you want. You do not need to be physically present at the worker device.
+
+Very useful when you're commuting and you have some free time that you want to spend doing some lightweight work.
+
+This is possible because the worker and the UI is decoupled.
+
+The worker reacts to the incoming events and also posts events.
+
+This allows you to write and read the events from anywhere you like.
+
+You can also setup your own automated workflows by reading the event stream, for example a Hermes agent that prepares standup updates for you.

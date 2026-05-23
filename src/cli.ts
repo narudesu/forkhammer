@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { commandNew } from "./commands/new";
+import { runWorker } from "./worker";
 
 async function runCli() {
   const program = new Command()
@@ -9,7 +9,12 @@ async function runCli() {
     )
     .version("0.1.0");
 
-  commandNew(program);
+  program
+    .command("start-worker", { hidden: true })
+    .description("Start the Forkhammer background worker")
+    .action(async () => {
+      await runWorker();
+    });
 
   await program.parseAsync();
 }

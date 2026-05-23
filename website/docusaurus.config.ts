@@ -12,7 +12,7 @@ const repoUrl = `https://github.com/${organizationName}/${projectName}`;
 
 const config: Config = {
   title: "forkhammer",
-  tagline: "Validate Jira issues and launch focused OpenCode sessions",
+  tagline: "workflow for processing Jira issues in isolated OpenCode worktrees",
   favicon: "img/favicon.ico",
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
@@ -48,16 +48,6 @@ const config: Config = {
         docs: {
           sidebarPath: "./sidebars.ts",
         },
-        blog: {
-          showReadingTime: true,
-          feedOptions: {
-            type: ["rss", "atom"],
-            xslt: true,
-          },
-          onInlineTags: "warn",
-          onInlineAuthors: "warn",
-          onUntruncatedBlogPosts: "warn",
-        },
         theme: {
           customCss: "./src/css/custom.css",
         },
@@ -80,7 +70,6 @@ const config: Config = {
           position: "left",
           label: "Docs",
         },
-        { to: "/blog", label: "Blog", position: "left" },
         {
           href: repoUrl,
           label: "GitHub",
@@ -98,23 +87,18 @@ const config: Config = {
               label: "Introduction",
               to: "/docs/intro",
             },
+            {
+              label: "Architecture",
+              to: "/docs/architecture",
+            },
           ],
         },
         {
           title: "More",
-          items: [
-            {
-              label: "Blog",
-              to: "/blog",
-            },
-            {
-              label: "GitHub",
-              href: repoUrl,
-            },
-          ],
+          items: [{ label: "GitHub", href: repoUrl }],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} forkhammer. Built with Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} Matej Smid. Built with Docusaurus.`,
     },
     prism: {
       theme: prismThemes.github,

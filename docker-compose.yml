@@ -1,0 +1,22 @@
+services:
+  forkhammer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        OPENCODE_USER: ${USER}
+    container_name: forkhammer
+    restart: unless-stopped
+    ports:
+      - "8042:8000"
+    environment:
+      XDG_DATA_HOME: /home/${USER}/code/opencode
+      XDG_CONFIG_HOME: /home/${USER}/code/opencode/config
+      FORKHAMMER_STATE_DIR: /home/${USER}/.local/state/forkhammer
+      DEBUG: "app:*"
+      DEBUG_COLORS: "1"
+      FORCE_COLOR: "1"
+    volumes:
+      - ${HOME}/code/opencode-alt:/home/${USER}/code/opencode
+      - ${HOME}/.config/forkhammer:/home/${USER}/.config/forkhammer:ro
+      - ${HOME}/.local/state/forkhammer:/home/${USER}/.local/state/forkhammer

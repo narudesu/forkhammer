@@ -10,6 +10,12 @@ const zProjectConfig = z.object({
 });
 
 const zConfig = z.object({
+  opencode: z
+    .object({
+      default_provider_id: z.string().min(1).optional(),
+      default_model_id: z.string().min(1).optional(),
+    })
+    .optional(),
   jira: z
     .object({
       auth: z.string(),
@@ -17,6 +23,14 @@ const zConfig = z.object({
     })
     .optional(),
   project: z.record(z.string(), zProjectConfig).optional(),
+  supabase: z
+    .object({
+      url: z.string(),
+      anon_key: z.string(),
+      secret_string: z.string(),
+      table: z.string().optional(),
+    })
+    .optional(),
 });
 
 export type Config = z.infer<typeof zConfig>;

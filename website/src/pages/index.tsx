@@ -1,6 +1,5 @@
 import Link from "@docusaurus/Link";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
-import HomepageFeatures from "@site/src/components/HomepageFeatures";
 import Heading from "@theme/Heading";
 import Layout from "@theme/Layout";
 import clsx from "clsx";
@@ -22,7 +21,7 @@ function HomepageHeader() {
             className="button button--secondary button--lg"
             to="/docs/intro"
           >
-            Get Started
+            Read the docs
           </Link>
         </div>
       </div>
@@ -34,11 +33,31 @@ export default function Home(): ReactNode {
   return (
     <Layout
       title="forkhammer"
-      description="Description will go into a meta tag in <head />"
+      description="Event-sourced Jira validation for OpenCode"
     >
       <HomepageHeader />
       <main>
-        <HomepageFeatures />
+        <section className="container margin-vert--lg">
+          <div className="row">
+            <div className="col col--4">
+              <Heading as="h3">Intro</Heading>
+              <p>
+                Get a quick overview of the current system and where to start.
+              </p>
+              <Link to="/docs/intro">Open introduction</Link>
+            </div>
+            <div className="col col--4">
+              <Heading as="h3">Architecture</Heading>
+              <p>Learn how Forkhammer uses an event-sourced architecture.</p>
+              <Link to="/docs/architecture">Read architecture</Link>
+            </div>
+            <div className="col col--4">
+              <Heading as="h3">Setup</Heading>
+              <p>See the config file and the Docker runtime assumptions.</p>
+              <Link to="/docs/configuration">View configuration</Link>
+            </div>
+          </div>
+        </section>
       </main>
     </Layout>
   );
