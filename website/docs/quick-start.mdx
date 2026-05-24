@@ -4,5 +4,88 @@ sidebar_position: 2
 
 # Quick Start
 
-Quick Start is not yet available. We're currently working on it to make your onboarding experience as smooth as possible. 
+**Clone the Repo**
+```sh
+git clone https://github.com/narudesu/forkhammer
+```
 
+**Prepare directories**
+
+The following directories will be mounted into the forkhammer docker container.
+
+We need to create them now so that they are owned by your user and not by root.
+
+```sh
+# this directory contains the repositories you want to work on 
+mkdir -p ~/code/forkhammer
+
+# forkhammer uses this directory to store local state - such as store state snapshots
+mkdir -p ~/.local/state/forkhammer
+
+# this directory houses the config files
+mkdir -p ~/.config/forkhammer
+```
+
+**Create config**
+
+```sh
+cp examples/config.toml ~/.config/forkhammer/config.toml
+```
+
+Copy the example config to `~/.config/forkhammer/config.toml`, then open it, read the comments and configure to your liking.
+
+
+**Start the docker container**
+
+You need to have docker compose installed. If you don't, see https://docs.docker.com/compose/install for instructions.
+
+```sh
+# first, build the docker image
+# the Dockerfile extends the opencode image, installs bun and builds the forkhammer executable
+docker-compose build
+
+# start the docker container
+# it launches an opencode server running on port 8000, exposed to the host
+# and it launches the forkhammer worker, listening for new supabase table events
+docker-compose up -d
+
+# here are some useful commands:
+
+# view container logs
+docker-compose logs -f --no-log-prefix forkhammer
+
+# stop the container
+docker-compose down -v
+
+# see the container status
+docker-compose ps
+```
+
+**Set up OpenCode**
+
+Visit `localhost:8000` to access your opencode web UI.
+
+Here, you can configure your model providers, settings and open projects.
+
+The opencode runs inside the docker container, so it only has access to the mounted folder.
+
+**Get to know created directories**
+
+After the container is started, opencode creates the `~/code/forkhammer/opencode` directory.
+
+It contains these files:
+
+```
+log
+opencode.db
+opencode.db-shm
+opencode.db-wal
+```
+
+They are used by opencode to keep the state of your sessions.
+
+Then there is the `~/code/forkhammer/config/opencode` folder which serves as the configuration folder for OpenCode.
+
+If you configure an AI model provider, a file called `opencode.json` should appear.
+
+See https://opencode.ai/docs/config for more detail on the file.

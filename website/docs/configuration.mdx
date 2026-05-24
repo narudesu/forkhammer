@@ -1,5 +1,5 @@
 ---
-sidebar_position: 4
+sidebar_position: 5
 ---
 
 # Configuration
@@ -12,6 +12,8 @@ Forkhammer reads local configuration from:
 
 ## Config structure
 
+### Secret string exchange
+
 ```toml
 [opencode]
 default_provider_id = "openai"
@@ -23,11 +25,33 @@ auth = "email@example.com:api_token"
 
 [project.api]
 key = "KEY"
-root = "/home/you/code/opencode/your-repo"
+root = "/home/you/code/forkhammer/your-repo"
 
 [supabase]
 url = "https://<project-ref>.supabase.co"
 anon_key = "<anon-key>"
-secret_string = "<raw-cli-secret-string>"
 table = "ultrafeed_item"
+
+[supabase.auth]
+type = "secret_string"
+secret_string = "<raw-cli-secret-string>"
+function_url = "https://<project-ref>.supabase.co/functions/v1/generate-worker-token"
 ```
+
+### Password auth
+
+```toml
+[supabase]
+url = "https://<project-ref>.supabase.co"
+anon_key = "<anon-key>"
+table = "ultrafeed_item"
+
+[supabase.auth]
+type = "password"
+email = "worker@example.com"
+password = "<password>"
+```
+
+## Supabase setup expectations
+
+See [Self-hosting Supabase expectations](./self-hosting-supabase) for the table, realtime, auth, and function contract you need to provision yourself.

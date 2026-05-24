@@ -1,0 +1,69 @@
+---
+sidebar_position: 3
+---
+
+# Self-hosting Supabase
+
+Forkhammer expects a Supabase-compatible backend with a realtime table and one of two auth paths.
+
+## What you need
+
+- A Supabase project URL.
+- The anon key for that project.
+- A public event table named `ultrafeed_item` or your configured table name.
+- Realtime enabled for that table.
+- Policies that let the worker read the event stream and insert new worker events with the access token it acquires.
+
+## Auth modes
+
+### Password auth
+
+Use Supabase Auth with a dedicated worker user.
+
+Config example:
+
+```toml
+[supabase.auth]
+type = "password"
+email = "worker@example.com"
+password = "<password>"
+```
+
+### Secret string exchange
+
+Host a function or HTTP endpoint that exchanges a shared secret for an access token.
+
+Config example:
+
+```toml
+[supabase.auth]
+type = "secret_string"
+secret_string = "<raw-cli-secret-string>"
+function_url = "https://<your-host>/functions/v1/generate-worker-token"
+```
+
+The endpoint must:
+
+- Accept a JSON body containing `secret_string`.
+- Return JSON with a `token` field.
+- Be reachable from the worker host.
+
+## Table shape
+
+Forkhammer reads and writes event rows from the configured table. The default table name is `ultrafeed_item`.
+
+At minimum, the table must expose the columns the worker reads today:
+
+- `id - uuid`
+- `created_at - timestampz`
+- `event_type - string`
+- `data - jsonb`
+
+## Realtime
+
+The worker subscribes to `INSERT` changes on the configured table.
+
+Make sure:
+
+- Realtime is enabled for the table.
+- The authenticated worker user can receive the inserts.

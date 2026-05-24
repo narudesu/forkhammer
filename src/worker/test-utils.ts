@@ -10,8 +10,12 @@ export function createTestExecutionContext(
     config: {
       url: "https://example.supabase.co",
       anonKey: "anon",
-      secretString: "secret",
       table: "ultrafeed_item",
+      auth: {
+        type: "secret_string",
+        secretString: "secret",
+        functionUrl: "https://example.supabase.co/functions/v1/generate-worker-token",
+      },
     },
     supabase: {
       client: {

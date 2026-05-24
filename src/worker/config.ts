@@ -12,7 +12,18 @@ export async function loadWorkerConfig(): Promise<SupabaseConfig> {
   return {
     url: config.supabase.url,
     anonKey: config.supabase.anon_key,
-    secretString: config.supabase.secret_string,
     table: config.supabase.table ?? "ultrafeed_item",
+    auth:
+      config.supabase.auth.type === "password"
+        ? {
+            type: "password",
+            email: config.supabase.auth.email,
+            password: config.supabase.auth.password,
+          }
+        : {
+            type: "secret_string",
+            secretString: config.supabase.auth.secret_string,
+            functionUrl: config.supabase.auth.function_url,
+          },
   };
 }

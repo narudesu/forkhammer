@@ -1,0 +1,50 @@
+# an example config, modify it to your needs
+
+[opencode]
+# choose your desired model that will be used to process the work plans
+# my current favorite is gpt-5.4-mini
+# you'll need to configure your API keys in OpenCode config to be able to use the model
+default_provider_id = "openai"
+default_model_id = "gpt-5.4-mini"
+
+[jira]
+# set up your jira instance url + jira email + api token
+url = "https://your-jira-instance.atlassian.net"
+
+# you can get the api_token here
+# https://id.atlassian.com/manage-profile/security/api-tokens
+auth = "email@example.com:api_token"
+
+# under the project key, list all jira project you want to work on
+# this is so that forkhammer knows which issue key belongs to which directory
+[project.my-project]
+# key is the jira issue key prefix - for example when issue keys look like KEY-11, put KEY here
+key = "KEY"
+# root is the path to the project directory
+root = "/home/you/code/forkhammer/my-project"
+
+# supabase setup
+[supabase]
+
+# url of your supabase instance
+url = "https://<project-ref>.supabase.co"
+
+# anon key of your supabase instance
+anon_key = "<anon-key>"
+
+# the name of the event table
+table = "ultrafeed_item"
+
+# choose one auth strategy:
+
+# 1) password auth through Supabase Auth
+# [supabase.auth]
+# type = "password"
+# email = "worker@example.com"
+# password = "<password>"
+
+# 2) secret string exchange through a function you host
+[supabase.auth]
+type = "secret_string"
+secret_string = "<raw-cli-secret-string>"
+function_url = "https://<project-ref>.supabase.co/functions/v1/generate-worker-token"

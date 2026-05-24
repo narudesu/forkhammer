@@ -27,8 +27,19 @@ const zConfig = z.object({
     .object({
       url: z.string(),
       anon_key: z.string(),
-      secret_string: z.string(),
       table: z.string().optional(),
+      auth: z.discriminatedUnion("type", [
+        z.object({
+          type: z.literal("password"),
+          email: z.string().email(),
+          password: z.string().min(1),
+        }),
+        z.object({
+          type: z.literal("secret_string"),
+          secret_string: z.string().min(1),
+          function_url: z.string().url(),
+        }),
+      ]),
     })
     .optional(),
 });

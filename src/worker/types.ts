@@ -1,8 +1,18 @@
 export type SupabaseConfig = {
   url: string;
   anonKey: string;
-  secretString: string;
   table: string;
+  auth:
+    | {
+        type: "password";
+        email: string;
+        password: string;
+      }
+    | {
+        type: "secret_string";
+        secretString: string;
+        functionUrl: string;
+      };
 };
 
 export type FeedEvent = {
