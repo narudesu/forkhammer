@@ -1,0 +1,71 @@
+---
+sidebar_position: 5
+---
+
+# CLI
+
+Forkhammer includes a host-side CLI that talks to Supabase directly.
+
+It runs outside Docker, so you can enqueue and inspect work from your machine while the worker stays inside the container.
+
+## How it works
+
+```text
+forkhammer queue add / read / list
+    |
+    v
+insert or select rows in Supabase
+    |
+    v
+Dockerized worker reacts to new rows
+    |
+    v
+worker writes result events back to Supabase
+    |
+    v
+CLI reads the same event stream by issue key
+```
+
+The queue commands use the event table as the source of truth:
+
+- `queue add` writes a `validate_issue_requested` event.
+- `queue list` shows recent events and the issue keys they belong to.
+- `queue read` reads the event history for one issue key and prints the latest result.
+
+## Build
+
+Build the CLI binary with:
+
+```sh
+bun run build:cli
+```
+
+Or build everything with:
+
+```sh
+bun run build
+```
+
+## Run
+
+During development, run the CLI directly:
+
+```sh
+bun run ./src/cli.ts queue list
+```
+
+After building, run the compiled binary:
+
+```sh
+./dist/forkhammer queue list
+```
+
+## Common commands
+
+```sh
+forkhammer queue add AT-123
+forkhammer queue list
+forkhammer queue read AT-123
+```
+
+The CLI uses the same `~/.config/forkhammer/config.toml` file as the worker, so the Supabase URL, auth, and project mapping stay consistent.

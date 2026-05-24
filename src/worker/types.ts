@@ -45,6 +45,7 @@ export type SupabaseSelectQueryLike = {
     data: Array<FeedEvent> | null;
     error: { message: string } | null;
   }>;
+  limit: (count: number) => SupabaseSelectQueryLike;
 };
 
 export type SupabaseClientLike = {

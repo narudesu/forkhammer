@@ -12,6 +12,7 @@ Most of the details live in `website/docs/`:
 
 - [Introduction](./website/docs/intro.mdx)
 - [Architecture](./website/docs/architecture.mdx)
+- [CLI](./website/docs/cli.mdx)
 - [Configuration](./website/docs/configuration.mdx)
 - [Where UI](./website/docs/where-ui.mdx)
 - [Quick Start](./website/docs/quick-start.mdx)

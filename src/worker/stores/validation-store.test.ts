@@ -37,7 +37,12 @@ describe("validation store", () => {
       id: "2",
       created_at: "2026-01-01",
       event_type: "validate_issue_started",
-      data: { issue_key: "AT-123" },
+      data: {
+        issue_key: "AT-123",
+        issue_summary: "Fix the thing",
+        jira_description: "Longer description",
+        issue_comments: [],
+      },
     });
 
     await store.reconcile();

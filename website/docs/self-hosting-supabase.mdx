@@ -13,6 +13,7 @@ Forkhammer expects a Supabase-compatible backend with a realtime table and one o
 - A public event table named `ultrafeed_item` or your configured table name.
 - Realtime enabled for that table.
 - Policies that let the worker read the event stream and insert new worker events with the access token it acquires.
+- Policies that let the host CLI insert request events and read recent events by issue key.
 
 ## Auth modes
 
@@ -67,3 +68,5 @@ Make sure:
 
 - Realtime is enabled for the table.
 - The authenticated worker user can receive the inserts.
+
+The host CLI uses the same Supabase backend, but it runs outside Docker. It needs the same table access for queue operations, so its auth path must be allowed to `insert` new requests and `select` the rows it reads back.
