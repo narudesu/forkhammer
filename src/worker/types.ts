@@ -41,11 +41,11 @@ export type SupabaseSelectQueryLike = {
   order: (
     column: string,
     options?: { ascending?: boolean },
-  ) => Promise<{
+  ) => SupabaseSelectQueryLike;
+  limit: (count: number) => Promise<{
     data: Array<FeedEvent> | null;
     error: { message: string } | null;
   }>;
-  limit: (count: number) => SupabaseSelectQueryLike;
 };
 
 export type SupabaseClientLike = {

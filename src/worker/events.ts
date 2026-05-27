@@ -2,13 +2,23 @@ import z from "zod";
 
 const zIssueKey = z.string().min(1);
 const zValidationError = z.string().min(1);
-const zEventSource = z.literal("naru-cli");
-const zEventCommand = z.literal("validate-issue");
+const zEventSource = z.string().min(1);
 
 const zIssueComment = z.object({
   author: z.string().min(1),
   body: z.string(),
   createdAt: z.string().min(1),
+});
+
+const zValidationSessionContext = z.object({
+  issue_key: zIssueKey,
+  project_key: z.string().min(1),
+  project_name: z.string().min(1),
+  project_id: z.string().min(1),
+  session_id: z.string().min(1),
+  worktree_name: z.string().min(1),
+  worktree_branch: z.string().min(1),
+  worktree_directory: z.string().min(1),
 });
 
 const zValidationQuestion = z.object({
@@ -34,18 +44,31 @@ const zValidateIssueRequestedData = z.object({
 });
 
 const zValidateIssueStartedData = z.object({
-  issue_key: zIssueKey,
+  ...zValidationSessionContext.shape,
   issue_summary: z.string(),
   jira_description: z.string(),
   issue_comments: z.array(zIssueComment),
 });
 
+const zValidateIssuePromptRequestedData = zValidationSessionContext.extend({
+  prompt: z.string().min(1),
+});
+
+const zValidateIssuePromptCompletedData = zValidationSessionContext.extend({
+  request_event_id: z.string().min(1),
+  prompt: z.string().min(1),
+  response: z.unknown(),
+});
+
+const zValidateIssuePromptFailedData = zValidationSessionContext.extend({
+  request_event_id: z.string().min(1),
+  prompt: z.string().min(1),
+  error: zValidationError,
+});
+
 const zIssueValidatedData = validationStructuredResultSchema.extend({
-  issue_key: zIssueKey,
+  ...zValidationSessionContext.shape,
   source: zEventSource,
-  command: zEventCommand,
-  project_key: z.string().min(1),
-  project_name: z.string().min(1),
   jira_summary: z.string(),
 });
 
@@ -67,6 +90,24 @@ export const ultrafeedEventDefinitions = [
     dataSchema: zValidateIssueStartedData,
   },
   {
+    eventType: "validate_issue_prompt_requested",
+    description:
+      "A request to add a new prompt to an existing validation session.",
+    dataSchema: zValidateIssuePromptRequestedData,
+  },
+  {
+    eventType: "validate_issue_prompt_completed",
+    description:
+      "A worker success event containing the prompt response from an OpenCode session.",
+    dataSchema: zValidateIssuePromptCompletedData,
+  },
+  {
+    eventType: "validate_issue_prompt_failed",
+    description:
+      "A worker failure event emitted when an OpenCode session prompt cannot be sent.",
+    dataSchema: zValidateIssuePromptFailedData,
+  },
+  {
     eventType: "issue_validated",
     description:
       "A worker success event containing the structured model output and issue metadata.",
@@ -82,6 +123,9 @@ export const ultrafeedEventDefinitions = [
 export const ultrafeedEventSchemas = {
   validate_issue_requested: zValidateIssueRequestedData,
   validate_issue_started: zValidateIssueStartedData,
+  validate_issue_prompt_requested: zValidateIssuePromptRequestedData,
+  validate_issue_prompt_completed: zValidateIssuePromptCompletedData,
+  validate_issue_prompt_failed: zValidateIssuePromptFailedData,
   issue_validated: zIssueValidatedData,
   issue_validation_failed: zIssueValidationFailedData,
 } as const;
@@ -90,6 +134,8 @@ export const ultrafeedRequestEventType = "validate_issue_requested" as const;
 
 export const ultrafeedWorkerEmittedEventTypes = [
   "validate_issue_started",
+  "validate_issue_prompt_completed",
+  "validate_issue_prompt_failed",
   "issue_validated",
   "issue_validation_failed",
 ] as const;

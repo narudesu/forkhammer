@@ -33,7 +33,5 @@ export async function processEvent(
 }
 
 export async function reconcileStores(stores: Array<WorkerStore<any>>) {
-  for (const store of stores) {
-    await store.reconcile();
-  }
+  await Promise.all(stores.map((store) => store.reconcile()));
 }

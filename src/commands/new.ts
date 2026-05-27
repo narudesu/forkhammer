@@ -5,6 +5,7 @@ import path from "node:path";
 import { loadConfig, type Config } from "../config";
 import { formatIssueContext, getIssueContext } from "../jira";
 import { unwrapOpencodeData } from "../opencode";
+import { printValidationResult } from "./validation-format";
 import {
   validationStructuredResultSchema,
   type UltrafeedEventData,
@@ -19,7 +20,30 @@ type ResolvedProject = {
 
 type ResolvedWorktree = {
   name: string;
+  branch: string;
   directory: string;
+};
+
+type ValidationIdentifiers = {
+  issueKey: string;
+  projectKey: string;
+  projectName: string;
+  projectId: string;
+  sessionId: string;
+  worktreeName: string;
+  worktreeBranch: string;
+  worktreeDirectory: string;
+};
+
+type ValidationEventIdentifiers = {
+  issue_key: string;
+  project_key: string;
+  project_name: string;
+  project_id: string;
+  session_id: string;
+  worktree_name: string;
+  worktree_branch: string;
+  worktree_directory: string;
 };
 
 type ModelConfig = {
@@ -30,6 +54,12 @@ type ModelConfig = {
 type ValidationEventHooks = {
   onStarted?: (
     payload: UltrafeedEventData<"validate_issue_started">,
+  ) => Promise<void> | void;
+  onPromptCompleted?: (
+    payload: UltrafeedEventData<"validate_issue_prompt_completed">,
+  ) => Promise<void> | void;
+  onPromptFailed?: (
+    payload: UltrafeedEventData<"validate_issue_prompt_failed">,
   ) => Promise<void> | void;
   onSucceeded?: (
     payload: UltrafeedEventData<"issue_validated">,
@@ -43,8 +73,11 @@ type ValidationRunResult = {
   issueKey: string;
   projectKey: string;
   projectName: string;
+  projectId: string;
   jiraSummary: string;
   sessionId: string;
+  worktreeName: string;
+  worktreeBranch: string;
   worktreeDirectory: string;
   result: ValidationStructuredResult;
 };
@@ -109,13 +142,6 @@ export async function runIssueValidation(input: {
     issueKey = issue.key;
     const context = formatIssueContext(issue);
 
-    await input.hooks?.onStarted?.({
-      issue_key: issue.key,
-      issue_summary: issue.summary,
-      jira_description: issue.description,
-      issue_comments: issue.comments,
-    });
-
     const rootClient = createOpencodeClient({
       baseUrl: "http://localhost:8000",
       directory: gitRoot,
@@ -132,6 +158,24 @@ export async function runIssueValidation(input: {
         title: `${issue.key} - ${issue.summary}`,
       })
       .then(unwrapOpencodeData);
+
+    const identifiers = toValidationEventIdentifiers({
+      issueKey: issue.key,
+      projectKey: project.key,
+      projectName: project.name,
+      projectId: session.projectID,
+      sessionId: session.id,
+      worktreeName: worktree.name,
+      worktreeBranch: worktree.branch,
+      worktreeDirectory: worktree.directory,
+    });
+
+    await input.hooks?.onStarted?.({
+      ...identifiers,
+      issue_summary: issue.summary,
+      jira_description: issue.description,
+      issue_comments: issue.comments,
+    });
 
     const controller = new AbortController();
     const eventLoop = input.streamEvents
@@ -150,17 +194,16 @@ export async function runIssueValidation(input: {
     const structured = extractValidationResult(result);
 
     await input.hooks?.onSucceeded?.({
-      issue_key: issue.key,
-      source: "naru-cli",
-      command: "validate-issue",
-      project_key: project.key,
-      project_name: project.name,
+      ...identifiers,
+      source: "forkhammer",
       jira_summary: issue.summary,
       ...structured,
     });
 
     if (input.streamEvents) {
-      printValidationResult(structured, worktree.directory);
+      printValidationResult(structured, {
+        worktreeDirectory: worktree.directory,
+      });
     }
 
     console.log(
@@ -171,8 +214,11 @@ export async function runIssueValidation(input: {
       issueKey: issue.key,
       projectKey: project.key,
       projectName: project.name,
+      projectId: session.projectID,
       jiraSummary: issue.summary,
       sessionId: session.id,
+      worktreeName: worktree.name,
+      worktreeBranch: worktree.branch,
       worktreeDirectory: worktree.directory,
       result: structured,
     };
@@ -180,6 +226,94 @@ export async function runIssueValidation(input: {
     await Promise.resolve(
       input.hooks?.onFailed?.({
         issue_key: issueKey,
+        error: toErrorMessage(error),
+      }),
+    ).catch(() => {});
+    throw error;
+  }
+}
+
+export async function runIssuePrompt(input: {
+  issueKey: string;
+  requestEventId: string;
+  prompt: string;
+  projectKey: string;
+  projectName: string;
+  projectId: string;
+  sessionId: string;
+  worktreeName: string;
+  worktreeBranch: string;
+  worktreeDirectory: string;
+  hooks?: ValidationEventHooks;
+}): Promise<void> {
+  try {
+    const client = createOpencodeClient({
+      baseUrl: "http://localhost:8000",
+      directory: input.worktreeDirectory,
+    });
+
+    const session = await client.session
+      .get({
+        sessionID: input.sessionId,
+        directory: input.worktreeDirectory,
+      })
+      .then(unwrapOpencodeData);
+
+    if (session.projectID !== input.projectId) {
+      throw new Error(
+        `session-project-mismatch:${input.sessionId}:${session.projectID}:${input.projectId}`,
+      );
+    }
+
+    if (session.directory !== input.worktreeDirectory) {
+      throw new Error(
+        `session-directory-mismatch:${input.sessionId}:${session.directory}:${input.worktreeDirectory}`,
+      );
+    }
+
+    const response = await client.session
+      .prompt({
+        sessionID: input.sessionId,
+        directory: input.worktreeDirectory,
+        parts: [
+          {
+            type: "text",
+            text: input.prompt,
+          },
+        ],
+      })
+      .then(unwrapOpencodeData);
+
+    await input.hooks?.onPromptCompleted?.({
+      ...toValidationEventIdentifiers({
+        issueKey: input.issueKey,
+        projectKey: input.projectKey,
+        projectName: input.projectName,
+        projectId: input.projectId,
+        sessionId: input.sessionId,
+        worktreeName: input.worktreeName,
+        worktreeBranch: input.worktreeBranch,
+        worktreeDirectory: input.worktreeDirectory,
+      }),
+      request_event_id: input.requestEventId,
+      prompt: input.prompt,
+      response,
+    });
+  } catch (error) {
+    await Promise.resolve(
+      input.hooks?.onPromptFailed?.({
+        ...toValidationEventIdentifiers({
+          issueKey: input.issueKey,
+          projectKey: input.projectKey,
+          projectName: input.projectName,
+          projectId: input.projectId,
+          sessionId: input.sessionId,
+          worktreeName: input.worktreeName,
+          worktreeBranch: input.worktreeBranch,
+          worktreeDirectory: input.worktreeDirectory,
+        }),
+        request_event_id: input.requestEventId,
+        prompt: input.prompt,
         error: toErrorMessage(error),
       }),
     ).catch(() => {});
@@ -311,6 +445,7 @@ function normalizeWorktree(
   if (typeof worktree === "string") {
     return {
       name: fallbackName ?? path.basename(worktree),
+      branch: fallbackName ?? path.basename(worktree),
       directory: worktree,
     };
   }
@@ -336,7 +471,26 @@ function normalizeWorktree(
       typeof record.name === "string"
         ? record.name
         : (fallbackName ?? path.basename(directory)),
+    branch:
+      typeof record.branch === "string"
+        ? record.branch
+        : (fallbackName ?? path.basename(directory)),
     directory,
+  };
+}
+
+function toValidationEventIdentifiers(
+  input: ValidationIdentifiers,
+): ValidationEventIdentifiers {
+  return {
+    issue_key: input.issueKey,
+    project_key: input.projectKey,
+    project_name: input.projectName,
+    project_id: input.projectId,
+    session_id: input.sessionId,
+    worktree_name: input.worktreeName,
+    worktree_branch: input.worktreeBranch,
+    worktree_directory: input.worktreeDirectory,
   };
 }
 
@@ -385,6 +539,7 @@ async function promptValidationSession(
       sessionID: input.sessionId,
       tools: {
         question: false,
+        explore: false,
       },
       format: VALIDATION_RESPONSE_FORMAT,
       model: input.model,
@@ -404,38 +559,6 @@ function resolveDefaultModel(config: Config): ModelConfig {
     providerID: config.opencode?.default_provider_id ?? "openai",
     modelID: config.opencode?.default_model_id ?? "gpt-5.4-mini",
   };
-}
-
-function printValidationResult(
-  structured: ValidationStructuredResult,
-  worktreeDirectory: string,
-) {
-  console.log(chalk.green("\nClarity:"));
-  console.log(structured.clarity);
-
-  console.log(chalk.green("\nSummary:"));
-  console.log(structured.summary);
-
-  console.log(chalk.green("\nTodos:"));
-  for (const todo of structured.todos) {
-    console.log(`- [ ] ${todo}`);
-  }
-
-  console.log(chalk.green("\nQuestions:"));
-  if (structured.questions.length) {
-    for (const [index, question] of structured.questions.entries()) {
-      console.log(`\nQuestion ${index + 1}: ${question.text}`);
-      console.log(`Path: ${question.relatedFilePath}`);
-    }
-  } else {
-    console.log("none");
-  }
-
-  console.log(chalk.green("\nRelated files:"));
-  for (const file of structured.relatedFiles) {
-    console.log(`- ${file.path.replace(worktreeDirectory, "")}`);
-    console.log(`  - ${file.note}`);
-  }
 }
 
 function buildValidationPrompt(context: string) {

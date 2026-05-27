@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { processEvent } from "./event-processor";
+import { processEvent, reconcileStores } from "./event-processor";
 import type { FeedEvent } from "./types";
 import { createTestExecutionContext } from "./test-utils";
 import type { WorkerStore } from "./stores/types";
@@ -87,6 +87,76 @@ describe("processEvent", () => {
     );
 
     assert.deepEqual(calls, ["reduce:2", "reconcile"]);
+  });
+
+  it("reconciles stores in parallel", async () => {
+    const calls: string[] = [];
+    createTestExecutionContext(calls);
+    let releaseFirst: () => void = () => {};
+    let releaseSecond: () => void = () => {};
+    const firstReady = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const secondReady = new Promise<void>((resolve) => {
+      releaseSecond = resolve;
+    });
+    const stores: Array<WorkerStore<any>> = [
+      {
+        name: "first",
+        reduce: () => false,
+        reconcile: async () => {
+          calls.push("start:first");
+          await firstReady;
+          calls.push("done:first");
+          return false;
+        },
+        hydrate: () => {},
+        snapshot: () => ({
+          version: 1,
+          cursor: null,
+          reducedEventsSinceSnapshot: 0,
+          state: {},
+        }),
+        needsSnapshot: () => false,
+        markSnapshotPersisted: () => {},
+        getCursor: () => null,
+      },
+      {
+        name: "second",
+        reduce: () => false,
+        reconcile: async () => {
+          calls.push("start:second");
+          await secondReady;
+          calls.push("done:second");
+          return false;
+        },
+        hydrate: () => {},
+        snapshot: () => ({
+          version: 1,
+          cursor: null,
+          reducedEventsSinceSnapshot: 0,
+          state: {},
+        }),
+        needsSnapshot: () => false,
+        markSnapshotPersisted: () => {},
+        getCursor: () => null,
+      },
+    ];
+
+    const reconcile = reconcileStores(stores);
+    await Promise.resolve();
+
+    assert.deepEqual(calls, ["start:first", "start:second"]);
+
+    releaseFirst?.();
+    releaseSecond?.();
+    await reconcile;
+    assert.deepEqual(calls, [
+      "start:first",
+      "start:second",
+      "done:first",
+      "done:second",
+    ]);
   });
 });
 

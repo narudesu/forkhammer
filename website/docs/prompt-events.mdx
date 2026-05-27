@@ -1,0 +1,128 @@
+---
+sidebar_position: 6
+---
+
+# Prompt Events
+
+Forkhammer supports follow-up prompts inside an existing validation session.
+
+These events let the worker send extra instructions to OpenCode after the initial validation has already started.
+
+## Event flow
+
+```text
+validate_issue_requested
+    |
+    v
+validate_issue_started
+    |
+    +--> validate_issue_prompt_requested
+            |
+            v
+      validate_issue_prompt_completed
+      or
+      validate_issue_prompt_failed
+```
+
+## Shared context
+
+All prompt-related events include the same session context:
+
+```json
+{
+  "issue_key": "AT-123",
+  "project_key": "at",
+  "project_name": "Alpha Team",
+  "project_id": "project-1",
+  "session_id": "session-1",
+  "worktree_name": "AT-123",
+  "worktree_branch": "AT-123",
+  "worktree_directory": "/work/alpha/AT-123"
+}
+```
+
+## `validate_issue_prompt_requested`
+
+This event requests that the worker send a new prompt into the existing session.
+
+### Structure
+
+```json
+{
+  "issue_key": "AT-123",
+  "project_key": "at",
+  "project_name": "Alpha Team",
+  "project_id": "project-1",
+  "session_id": "session-1",
+  "worktree_name": "AT-123",
+  "worktree_branch": "AT-123",
+  "worktree_directory": "/work/alpha/AT-123",
+  "prompt": "Add a follow-up note"
+}
+```
+
+### Fields
+
+- `prompt`: text sent to OpenCode.
+
+## `validate_issue_prompt_completed`
+
+This event is emitted after the prompt is successfully sent to OpenCode and a response is returned.
+
+### Structure
+
+```json
+{
+  "issue_key": "AT-123",
+  "project_key": "at",
+  "project_name": "Alpha Team",
+  "project_id": "project-1",
+  "session_id": "session-1",
+  "worktree_name": "AT-123",
+  "worktree_branch": "AT-123",
+  "worktree_directory": "/work/alpha/AT-123",
+  "request_event_id": "evt-1",
+  "prompt": "Add a follow-up note",
+  "response": {}
+}
+```
+
+### Fields
+
+- `request_event_id`: event id of the matching `validate_issue_prompt_requested` row.
+- `prompt`: the original prompt text.
+- `response`: raw OpenCode response payload.
+
+## `validate_issue_prompt_failed`
+
+This event is emitted when the worker cannot send the prompt to OpenCode.
+
+### Structure
+
+```json
+{
+  "issue_key": "AT-123",
+  "project_key": "at",
+  "project_name": "Alpha Team",
+  "project_id": "project-1",
+  "session_id": "session-1",
+  "worktree_name": "AT-123",
+  "worktree_branch": "AT-123",
+  "worktree_directory": "/work/alpha/AT-123",
+  "request_event_id": "evt-1",
+  "prompt": "Add a follow-up note",
+  "error": "session-directory-mismatch:..."
+}
+```
+
+### Fields
+
+- `request_event_id`: event id of the matching request row.
+- `prompt`: the original prompt text.
+- `error`: a non-empty error message.
+
+## Notes
+
+- Prompt events are tied to one validation session.
+- The worker validates the session id, project id, and worktree directory before sending the prompt.
+- Queue inspection shows these events alongside the rest of the issue history.

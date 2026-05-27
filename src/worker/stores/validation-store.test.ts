@@ -39,6 +39,13 @@ describe("validation store", () => {
       event_type: "validate_issue_started",
       data: {
         issue_key: "AT-123",
+        project_key: "at",
+        project_name: "Alpha Team",
+        project_id: "project-1",
+        session_id: "session-1",
+        worktree_name: "AT-123",
+        worktree_branch: "AT-123",
+        worktree_directory: "/work/alpha/AT-123",
         issue_summary: "Fix the thing",
         jira_description: "Longer description",
         issue_comments: [],
@@ -50,6 +57,95 @@ describe("validation store", () => {
     assert.deepEqual(calls, []);
   });
 
+  it("dispatches prompt requests once", async () => {
+    const calls: string[] = [];
+    const ctx = createTestExecutionContext(calls);
+    const store = createValidationStore(ctx);
+
+    store.reduce({
+      id: "1",
+      created_at: "2026-01-01",
+      event_type: "validate_issue_requested",
+      data: { issue_key: "AT-123" },
+    });
+    store.reduce({
+      id: "2",
+      created_at: "2026-01-01",
+      event_type: "validate_issue_prompt_requested",
+      data: {
+        issue_key: "AT-123",
+        project_key: "at",
+        project_name: "Alpha Team",
+        project_id: "project-1",
+        session_id: "session-1",
+        worktree_name: "AT-123",
+        worktree_branch: "AT-123",
+        worktree_directory: "/work/alpha/AT-123",
+        prompt: "Add a follow up note",
+      },
+    });
+
+    await store.reconcile();
+    await store.reconcile();
+
+    assert.deepEqual(calls, [
+      "runIssuePrompt:AT-123",
+      "runIssueValidation:AT-123",
+    ]);
+  });
+
+  it("starts validation while a prompt is still pending", async () => {
+    const calls: string[] = [];
+    let releasePrompt: () => void = () => {};
+    const promptStarted = new Promise<void>((resolve) => {
+      releasePrompt = resolve;
+    });
+    const ctx = createTestExecutionContext(calls, {
+      validation: {
+        runIssuePrompt: async ({ issueKey }: { issueKey: string }) => {
+          calls.push(`prompt:start:${issueKey}`);
+          await promptStarted;
+          calls.push(`prompt:done:${issueKey}`);
+        },
+        runIssueValidation: async ({ key }: { key: string }) => {
+          calls.push(`validation:start:${key}`);
+        },
+      },
+    });
+    const store = createValidationStore(ctx);
+
+    store.reduce({
+      id: "1",
+      created_at: "2026-01-01",
+      event_type: "validate_issue_requested",
+      data: { issue_key: "AT-123" },
+    });
+    store.reduce({
+      id: "2",
+      created_at: "2026-01-01",
+      event_type: "validate_issue_prompt_requested",
+      data: {
+        issue_key: "AT-123",
+        project_key: "at",
+        project_name: "Alpha Team",
+        project_id: "project-1",
+        session_id: "session-1",
+        worktree_name: "AT-123",
+        worktree_branch: "AT-123",
+        worktree_directory: "/work/alpha/AT-123",
+        prompt: "Add a follow up note",
+      },
+    });
+
+    const reconcile = store.reconcile();
+    await Promise.resolve();
+
+    assert.deepEqual(calls, ["prompt:start:AT-123", "validation:start:AT-123"]);
+
+    releasePrompt();
+    await reconcile;
+  });
+
   it("captures validation failure without retrying immediately", async () => {
     const calls: string[] = [];
     const ctx = createTestExecutionContext(calls, {
@@ -57,6 +153,9 @@ describe("validation store", () => {
         runIssueValidation: async () => {
           calls.push("runIssueValidation:AT-123");
           throw new Error("validation failed");
+        },
+        runIssuePrompt: async () => {
+          calls.push("runIssuePrompt:AT-123");
         },
       },
       log: {

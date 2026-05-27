@@ -1,6 +1,6 @@
 import createDebug from "debug";
 import { createClient } from "@supabase/supabase-js";
-import { runIssueValidation } from "../commands/new";
+import { runIssuePrompt, runIssueValidation } from "../commands/new";
 import { login } from "./auth";
 import { emitEvent } from "./event-emitter";
 import type { SupabaseConfig, SupabaseClientLike } from "./types";
@@ -16,6 +16,18 @@ export type ExecutionContext = {
   };
   validation: {
     runIssueValidation: (input: { key: string }) => Promise<void>;
+    runIssuePrompt: (input: {
+      issueKey: string;
+      requestEventId: string;
+      prompt: string;
+      projectKey: string;
+      projectName: string;
+      projectId: string;
+      sessionId: string;
+      worktreeName: string;
+      worktreeBranch: string;
+      worktreeDirectory: string;
+    }) => Promise<void>;
   };
   runtime: {
     sleep: (ms: number) => Promise<void>;
@@ -77,6 +89,29 @@ export function createExecutionContext(
                 config,
                 client,
                 "issue_validation_failed",
+                payload,
+              );
+            },
+          },
+        });
+      },
+      runIssuePrompt: async (input) => {
+        await runIssuePrompt({
+          ...input,
+          hooks: {
+            onPromptCompleted: async (payload) => {
+              await emitEvent(
+                config,
+                client,
+                "validate_issue_prompt_completed",
+                payload,
+              );
+            },
+            onPromptFailed: async (payload) => {
+              await emitEvent(
+                config,
+                client,
+                "validate_issue_prompt_failed",
                 payload,
               );
             },

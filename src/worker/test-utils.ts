@@ -14,7 +14,8 @@ export function createTestExecutionContext(
       auth: {
         type: "secret_string",
         secretString: "secret",
-        functionUrl: "https://example.supabase.co/functions/v1/generate-worker-token",
+        functionUrl:
+          "https://example.supabase.co/functions/v1/generate-worker-token",
       },
     },
     supabase: {
@@ -35,7 +36,8 @@ export function createTestExecutionContext(
           select: () => {
             const query = {
               gte: () => query,
-              order: async () => ({ data: [], error: null }),
+              order: () => query,
+              limit: async () => ({ data: [], error: null }),
             };
 
             return query;
@@ -51,6 +53,9 @@ export function createTestExecutionContext(
     validation: {
       runIssueValidation: async ({ key }: { key: string }) => {
         calls.push(`runIssueValidation:${key}`);
+      },
+      runIssuePrompt: async ({ issueKey }: { issueKey: string }) => {
+        calls.push(`runIssuePrompt:${issueKey}`);
       },
     },
     runtime: {
