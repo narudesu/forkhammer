@@ -24,6 +24,7 @@ export type FeedEvent = {
 
 export type ProcessResult = {
   unauthorized: boolean;
+  processed: boolean;
 };
 
 export type RealtimeChannelLike = {

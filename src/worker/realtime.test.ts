@@ -50,13 +50,11 @@ describe("realtime subscription", () => {
           hydrate: () => {},
           snapshot: () => ({
             version: 1,
-            cursor: null,
             reducedEventsSinceSnapshot: 0,
             state: {},
           }),
           needsSnapshot: () => false,
           markSnapshotPersisted: () => {},
-          getCursor: () => null,
         },
       ];
 
@@ -78,7 +76,7 @@ describe("realtime subscription", () => {
       const result = await subscription;
 
       assert.deepEqual(events, ["s1", "r1"]);
-      assert.deepEqual(result, { unauthorized: false });
+      assert.deepEqual(result, { unauthorized: false, processed: false });
     } finally {
       process.env.FORKHAMMER_STATE_DIR = previous;
       await rm(stateHome, { recursive: true, force: true });
@@ -126,13 +124,11 @@ describe("realtime subscription", () => {
           hydrate: () => {},
           snapshot: () => ({
             version: 1,
-            cursor: null,
             reducedEventsSinceSnapshot: 0,
             state: {},
           }),
           needsSnapshot: () => false,
           markSnapshotPersisted: () => {},
-          getCursor: () => null,
         },
       ];
 
@@ -154,7 +150,7 @@ describe("realtime subscription", () => {
       const result = await subscription;
 
       assert.deepEqual(events, ["dup"]);
-      assert.deepEqual(result, { unauthorized: false });
+      assert.deepEqual(result, { unauthorized: false, processed: false });
     } finally {
       process.env.FORKHAMMER_STATE_DIR = previous;
       await rm(stateHome, { recursive: true, force: true });

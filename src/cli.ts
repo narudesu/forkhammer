@@ -17,7 +17,9 @@ async function runCli() {
       await runWorker();
     });
 
-  const queue = program.command("queue").description("Inspect the Supabase event queue");
+  const queue = program
+    .command("queue")
+    .description("Inspect the Supabase event queue");
 
   queue
     .command("add <issue-key>")

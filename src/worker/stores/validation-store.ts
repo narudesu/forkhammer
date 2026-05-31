@@ -4,7 +4,7 @@ import { getIssueKey } from "../domain";
 import { parseUltrafeedEventData } from "../events";
 import type { UltrafeedEventData } from "../events";
 import type { FeedEvent } from "../types";
-import type { StoreSnapshot, WorkerStore } from "./types";
+import type { EventCursor, StoreSnapshot, WorkerStore } from "./types";
 
 type IssueState = {
   requestEventId: string | null;
@@ -57,13 +57,12 @@ export function createValidationStore(
     issues: {},
   };
 
-  let cursor: StoreSnapshot["cursor"] = null;
   let reducedEventsSinceSnapshot = 0;
   let forceSnapshot = false;
 
   return {
     name: "validation",
-    reduce(event: FeedEvent) {
+    reduce(event: FeedEvent, cursor: EventCursor | null) {
       if (!VALIDATION_EVENT_TYPES.has(event.event_type)) {
         return false;
       }
@@ -171,10 +170,9 @@ export function createValidationStore(
         );
       }
 
-      cursor = { created_at: event.created_at, id: event.id };
-      reducedEventsSinceSnapshot += 1;
-      return true;
-    },
+        reducedEventsSinceSnapshot += 1;
+        return true;
+      },
     async reconcile() {
       let mutated = false;
       const dispatches: Array<Promise<void>> = [];
@@ -268,14 +266,12 @@ export function createValidationStore(
           ([issueKey, issue]) => [issueKey, normalizeIssueState(issue)],
         ),
       );
-      cursor = snapshot?.cursor ?? null;
       reducedEventsSinceSnapshot = snapshot?.reducedEventsSinceSnapshot ?? 0;
       forceSnapshot = false;
     },
     snapshot() {
       return {
         version: 1 as const,
-        cursor,
         reducedEventsSinceSnapshot,
         state,
       };
@@ -286,9 +282,6 @@ export function createValidationStore(
     markSnapshotPersisted() {
       reducedEventsSinceSnapshot = 0;
       forceSnapshot = false;
-    },
-    getCursor() {
-      return cursor;
     },
   };
 }
@@ -330,7 +323,7 @@ function normalizeIssueState(issue: Partial<IssueState>): IssueState {
 }
 
 function isAfterCurrentCursor(
-  cursor: StoreSnapshot["cursor"],
+  cursor: EventCursor | null,
   event: FeedEvent,
 ) {
   if (!cursor) {

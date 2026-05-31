@@ -10,6 +10,7 @@ describe("processEvent", () => {
     const calls: string[] = [];
     const ctx = createTestExecutionContext(calls);
     const seenEventIds = new Set<string>();
+    const cursor = { current: null as { created_at: string; id: string } | null };
     const stores: Array<WorkerStore<any>> = [
       {
         name: "test-store",
@@ -24,13 +25,11 @@ describe("processEvent", () => {
         hydrate: () => {},
         snapshot: () => ({
           version: 1,
-          cursor: null,
           reducedEventsSinceSnapshot: 0,
           state: {},
         }),
         needsSnapshot: () => false,
         markSnapshotPersisted: () => {},
-        getCursor: () => null,
       },
     ];
 
@@ -40,8 +39,12 @@ describe("processEvent", () => {
       data: { issue_key: "AT-123" },
     });
 
-    await processEvent(ctx, event, stores, seenEventIds, { reconcile: false });
-    await processEvent(ctx, event, stores, seenEventIds, { reconcile: true });
+    await processEvent(ctx, event, stores, seenEventIds, cursor, {
+      reconcile: false,
+    });
+    await processEvent(ctx, event, stores, seenEventIds, cursor, {
+      reconcile: true,
+    });
 
     assert.deepEqual(calls, ["reduce:1"]);
   });
@@ -50,6 +53,7 @@ describe("processEvent", () => {
     const calls: string[] = [];
     const ctx = createTestExecutionContext(calls);
     const seenEventIds = new Set<string>();
+    const cursor = { current: null as { created_at: string; id: string } | null };
     const stores: Array<WorkerStore<any>> = [
       {
         name: "test-store",
@@ -64,13 +68,11 @@ describe("processEvent", () => {
         hydrate: () => {},
         snapshot: () => ({
           version: 1,
-          cursor: null,
           reducedEventsSinceSnapshot: 0,
           state: {},
         }),
         needsSnapshot: () => false,
         markSnapshotPersisted: () => {},
-        getCursor: () => null,
       },
     ];
 
@@ -83,6 +85,7 @@ describe("processEvent", () => {
       }),
       stores,
       seenEventIds,
+      cursor,
       { reconcile: true },
     );
 
@@ -113,13 +116,11 @@ describe("processEvent", () => {
         hydrate: () => {},
         snapshot: () => ({
           version: 1,
-          cursor: null,
           reducedEventsSinceSnapshot: 0,
           state: {},
         }),
         needsSnapshot: () => false,
         markSnapshotPersisted: () => {},
-        getCursor: () => null,
       },
       {
         name: "second",
@@ -133,17 +134,15 @@ describe("processEvent", () => {
         hydrate: () => {},
         snapshot: () => ({
           version: 1,
-          cursor: null,
           reducedEventsSinceSnapshot: 0,
           state: {},
         }),
         needsSnapshot: () => false,
         markSnapshotPersisted: () => {},
-        getCursor: () => null,
       },
     ];
 
-    const reconcile = reconcileStores(stores);
+    const reconcile = reconcileStores(createTestExecutionContext(calls), stores);
     await Promise.resolve();
 
     assert.deepEqual(calls, ["start:first", "start:second"]);
@@ -157,6 +156,50 @@ describe("processEvent", () => {
       "done:first",
       "done:second",
     ]);
+  });
+
+  it("logs and continues when one store reconcile fails", async () => {
+    const calls: string[] = [];
+    const ctx = createTestExecutionContext(calls);
+    const cursor = { current: null as { created_at: string; id: string } | null };
+    const stores: Array<WorkerStore<any>> = [
+      {
+        name: "first",
+        reduce: () => false,
+        reconcile: async () => {
+          calls.push("reconcile:first");
+          throw new Error("boom");
+        },
+        hydrate: () => {},
+        snapshot: () => ({
+          version: 1,
+          reducedEventsSinceSnapshot: 0,
+          state: {},
+        }),
+        needsSnapshot: () => false,
+        markSnapshotPersisted: () => {},
+      },
+      {
+        name: "second",
+        reduce: () => false,
+        reconcile: async () => {
+          calls.push("reconcile:second");
+          return false;
+        },
+        hydrate: () => {},
+        snapshot: () => ({
+          version: 1,
+          reducedEventsSinceSnapshot: 0,
+          state: {},
+        }),
+        needsSnapshot: () => false,
+        markSnapshotPersisted: () => {},
+      },
+    ];
+
+    await reconcileStores(ctx, stores);
+
+    assert.deepEqual(calls, ["reconcile:first", "reconcile:second"]);
   });
 });
 

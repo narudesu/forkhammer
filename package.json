@@ -4,8 +4,7 @@
   "private": true,
   "packageManager": "bun@1.3.6",
   "scripts": {
-    "build": "bun run build:cli && bun run build:docs",
-    "build:cli": "bun build ./src/cli.ts --compile --outfile ./dist/forkhammer",
+    "build": "bun run build:docs",
     "build:docs": "node ./scripts/docusaurus.mjs build website",
     "postinstall": "true",
     "dev": "bun run ./src/cli.ts",
@@ -21,6 +20,8 @@
     "commander": "^14.0.2",
     "debug": "^4.4.3",
     "execa": "^9.6.1",
+    "node-datachannel": "^0.32.3",
+    "peerjs": "^1.5.5",
     "pretty-error": "^4.0.0",
     "smol-toml": "^1.6.0",
     "zod": "^4.1.13"
@@ -41,5 +42,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "typescript": "~6.0.2"
-  }
+  },
+  "trustedDependencies": [
+    "node-datachannel"
+  ]
 }

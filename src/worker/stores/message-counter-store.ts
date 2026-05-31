@@ -1,7 +1,7 @@
 import chalk from "chalk";
 import type { ExecutionContext } from "../context";
 import type { FeedEvent } from "../types";
-import type { StoreSnapshot, WorkerStore } from "./types";
+import type { EventCursor, StoreSnapshot, WorkerStore } from "./types";
 
 type MessageCounterState = {
   totalReceived: number;
@@ -21,14 +21,13 @@ export function createMessageCounterStore(
     lastEventType: null,
   };
 
-  let cursor: StoreSnapshot["cursor"] = null;
   let reducedEventsSinceSnapshot = 0;
   let forceSnapshot = false;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   return {
     name: "message-counter",
-    reduce(event: FeedEvent) {
+    reduce(event: FeedEvent, cursor: EventCursor | null) {
       if (!isAfterCurrentCursor(cursor, event)) {
         return false;
       }
@@ -58,14 +57,12 @@ export function createMessageCounterStore(
       state.totalReceived = snapshot?.state.totalReceived ?? 0;
       state.lastEventId = snapshot?.state.lastEventId ?? null;
       state.lastEventType = snapshot?.state.lastEventType ?? null;
-      cursor = snapshot?.cursor ?? null;
       reducedEventsSinceSnapshot = snapshot?.reducedEventsSinceSnapshot ?? 0;
       forceSnapshot = false;
     },
     snapshot() {
       return {
         version: 1 as const,
-        cursor,
         reducedEventsSinceSnapshot,
         state,
       };
@@ -77,14 +74,11 @@ export function createMessageCounterStore(
       reducedEventsSinceSnapshot = 0;
       forceSnapshot = false;
     },
-    getCursor() {
-      return cursor;
-    },
   };
 }
 
 function isAfterCurrentCursor(
-  cursor: StoreSnapshot["cursor"],
+  cursor: EventCursor | null,
   event: FeedEvent,
 ) {
   if (!cursor) {

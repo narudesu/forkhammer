@@ -2,9 +2,14 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import type { FeedEvent } from "./types";
-import type { EventCursor, StoreSnapshot } from "./stores/types";
+import type {
+  EventCursor,
+  StoreSnapshot,
+  StoreSnapshotBundle,
+} from "./stores/types";
 
 const STATE_STORE_DIR = "forkhammer/state-store";
+const STATE_BUNDLE_FILE = "state.json";
 
 export function getStateStoreDir() {
   const forkhammerStateDir = process.env.FORKHAMMER_STATE_DIR?.trim();
@@ -18,6 +23,10 @@ export function getStateStoreDir() {
 
 export function getStoreSnapshotPath(storeName: string) {
   return join(getStateStoreDir(), `${storeName}.json`);
+}
+
+export function getStateSnapshotPath() {
+  return join(getStateStoreDir(), STATE_BUNDLE_FILE);
 }
 
 export function compareEventCursor(left: EventCursor, right: EventCursor) {
@@ -79,6 +88,28 @@ export async function writeStoreSnapshot<TState>(
   await rename(tmpPath, snapshotPath);
 }
 
+export async function readStateSnapshotBundle(): Promise<StoreSnapshotBundle | null> {
+  try {
+    const raw = await readFile(getStateSnapshotPath(), "utf8");
+    return parseStateSnapshotBundle(raw);
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+export async function writeStateSnapshotBundle(bundle: StoreSnapshotBundle) {
+  const snapshotPath = getStateSnapshotPath();
+  await mkdir(dirname(snapshotPath), { recursive: true });
+
+  const tmpPath = `${snapshotPath}.tmp`;
+  await writeFile(tmpPath, JSON.stringify(bundle, null, 2));
+  await rename(tmpPath, snapshotPath);
+}
+
 export function parseStoreSnapshot<TState>(raw: string) {
   const parsed = JSON.parse(raw) as Partial<StoreSnapshot<TState>>;
   if (parsed.version !== 1) {
@@ -86,6 +117,15 @@ export function parseStoreSnapshot<TState>(raw: string) {
   }
 
   return parsed as StoreSnapshot<TState>;
+}
+
+export function parseStateSnapshotBundle(raw: string) {
+  const parsed = JSON.parse(raw) as Partial<StoreSnapshotBundle>;
+  if (parsed.version !== 1) {
+    throw new Error("invalid-state-snapshot-version");
+  }
+
+  return parsed as StoreSnapshotBundle;
 }
 
 function isMissingFileError(error: unknown) {

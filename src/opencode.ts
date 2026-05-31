@@ -1,4 +1,4 @@
-import { createOpencodeClient } from "@opencode-ai/sdk";
+import { createOpencodeClient } from "@opencode-ai/sdk/v2";
 
 type OpencodeResponse<TData> = { data: TData | undefined; error: unknown };
 

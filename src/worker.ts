@@ -4,8 +4,11 @@ import { formatError } from "./error-format";
 import { loadWorkerConfig } from "./worker/config";
 import { runRealtimeSubscription } from "./worker/realtime";
 import type { ExecutionContext } from "./worker/context";
+import { ensureWebRtcGlobals } from "./webrtc-compat";
 
 export async function runWorker() {
+  ensureWebRtcGlobals();
+
   const workerConfig = await loadWorkerConfig();
   const ctx = createExecutionContext(workerConfig);
 

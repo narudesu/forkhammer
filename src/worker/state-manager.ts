@@ -1,28 +1,47 @@
 import type { ExecutionContext } from "./context";
 import {
   compareEventCursor,
-  getMinimumCursor,
   isAfterCursor,
+  readStateSnapshotBundle,
   readStoreSnapshot,
-  writeStoreSnapshot,
+  writeStateSnapshotBundle,
 } from "./persistence";
 import type { FeedEvent } from "./types";
-import type { WorkerStore } from "./stores/types";
+import type { EventCursor, WorkerStore } from "./stores/types";
 
 export async function hydrateStores(stores: Array<WorkerStore<any>>) {
-  for (const store of stores) {
-    const snapshot = await readStoreSnapshot(store.name);
-    store.hydrate(snapshot);
-  }
-}
+  const bundle = await readStateSnapshotBundle();
 
-export function getReplayCursor(stores: Array<WorkerStore<any>>) {
-  return getMinimumCursor(stores.map((store) => store.getCursor()));
+  if (bundle) {
+    for (const store of stores) {
+      store.hydrate(bundle.stores[store.name] ?? null);
+    }
+
+    return bundle.cursor;
+  }
+
+  const snapshots = await Promise.all(
+    stores.map(async (store) => {
+      const snapshot = (await readStoreSnapshot(store.name)) as
+        | (StoreSnapshotWithCursor | null)
+        | null;
+      return [store.name, snapshot] as const;
+    }),
+  );
+
+  for (const [storeName, snapshot] of snapshots) {
+    const store = stores.find((candidate) => candidate.name === storeName);
+    store?.hydrate(snapshot);
+  }
+
+  return getMaximumCursor(
+    snapshots.map(([, snapshot]) => snapshot?.cursor ?? null),
+  );
 }
 
 export async function loadBackfillEvents(
   ctx: ExecutionContext,
-  cursor: ReturnType<typeof getReplayCursor>,
+  cursor: EventCursor | null,
 ) {
   let query = ctx.supabase.client.from(ctx.config.table).select("*");
 
@@ -41,13 +60,41 @@ export async function loadBackfillEvents(
     .sort((left, right) => compareEventCursor(left, right));
 }
 
-export async function persistDueSnapshots(stores: Array<WorkerStore<any>>) {
-  for (const store of stores) {
-    if (!store.needsSnapshot()) {
-      continue;
-    }
+export async function persistDueSnapshots(
+  stores: Array<WorkerStore<any>>,
+  cursor: EventCursor | null,
+) {
+  if (!stores.some((store) => store.needsSnapshot())) {
+    return;
+  }
 
-    await writeStoreSnapshot(store.name, store.snapshot());
+  await writeStateSnapshotBundle({
+    version: 1,
+    cursor,
+    stores: Object.fromEntries(
+      stores.map((store) => [store.name, store.snapshot()]),
+    ),
+  });
+
+  for (const store of stores) {
     store.markSnapshotPersisted();
   }
 }
+
+function getMaximumCursor(cursors: Array<EventCursor | null>) {
+  const filtered = cursors.filter((cursor): cursor is EventCursor =>
+    Boolean(cursor),
+  );
+
+  if (filtered.length === 0) {
+    return null;
+  }
+
+  return filtered.reduce((maximum, cursor) =>
+    compareEventCursor(cursor, maximum) > 0 ? cursor : maximum,
+  );
+}
+
+type StoreSnapshotWithCursor = {
+  cursor: EventCursor | null;
+};

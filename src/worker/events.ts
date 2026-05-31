@@ -77,6 +77,16 @@ const zIssueValidationFailedData = z.object({
   error: zValidationError,
 });
 
+const zBrowserPeerReadyData = z.object({
+  peerId: z.string().min(1),
+});
+
+export const browserPeerReadyEventSchema = z.object({
+  peerId: z.string().min(1),
+});
+
+export type BrowserPeerReadyEvent = z.infer<typeof browserPeerReadyEventSchema>;
+
 export const ultrafeedEventDefinitions = [
   {
     eventType: "validate_issue_requested",
@@ -118,6 +128,12 @@ export const ultrafeedEventDefinitions = [
     description: "A worker failure event with the validation error.",
     dataSchema: zIssueValidationFailedData,
   },
+  {
+    eventType: "browser_peer_ready",
+    description:
+      "A browser peer is connected via PeerJS and ready to receive responses.",
+    dataSchema: zBrowserPeerReadyData,
+  },
 ] as const;
 
 export const ultrafeedEventSchemas = {
@@ -128,6 +144,7 @@ export const ultrafeedEventSchemas = {
   validate_issue_prompt_failed: zValidateIssuePromptFailedData,
   issue_validated: zIssueValidatedData,
   issue_validation_failed: zIssueValidationFailedData,
+  browser_peer_ready: zBrowserPeerReadyData,
 } as const;
 
 export const ultrafeedRequestEventType = "validate_issue_requested" as const;

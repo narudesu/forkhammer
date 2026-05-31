@@ -14,11 +14,14 @@ describe("queue project resolution", () => {
   } satisfies Partial<Config>;
 
   it("resolves a project from the issue key prefix", () => {
-    assert.deepEqual(resolveProjectFromIssueKey(config as Config, "ALPHA-123"), {
-      name: "alpha",
-      key: "ALPHA",
-      root: "/work/alpha",
-    });
+    assert.deepEqual(
+      resolveProjectFromIssueKey(config as Config, "ALPHA-123"),
+      {
+        name: "alpha",
+        key: "ALPHA",
+        root: "/work/alpha",
+      },
+    );
   });
 
   it("throws when the issue key does not match a configured project", () => {

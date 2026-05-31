@@ -7,32 +7,28 @@ ENV HOME=/home/${OPENCODE_USER}
 ENV PATH="$PATH:${HOME}/.bun/bin:/app/bin"
 
 RUN apk update && apk upgrade
-RUN apk add --no-cache bash curl libc6-compat git nodejs npm
+RUN apk add --no-cache bash curl libc6-compat git nodejs npm g++ make python3
 
 RUN adduser -D "$OPENCODE_USER" && addgroup "$OPENCODE_USER" "$OPENCODE_USER"
 USER ${OPENCODE_USER}
 
 WORKDIR /app
 
-COPY docker-tools/install-bun.sh /app/install-bun.sh
+COPY --chown=${OPENCODE_USER}:${OPENCODE_USER} docker-tools/install-bun.sh /app/install-bun.sh
 
 RUN bash /app/install-bun.sh
 
-WORKDIR /app/build-forkhammer
+WORKDIR /app/forkhammer
 
-COPY package.json bun.lock ./
+COPY --chown=${OPENCODE_USER}:${OPENCODE_USER} package.json bun.lock ./
+
 RUN bun install --frozen-lockfile
 
-COPY src ./src
-RUN bun run build:cli
+COPY --chown=${OPENCODE_USER}:${OPENCODE_USER} src ./src
 
-RUN mkdir -p /app/bin && mkdir -p "$HOME/.local/state"
+RUN mkdir -p "$HOME/.local/state"
 
-RUN cp ./dist/forkhammer /app/bin/forkhammer
-
-COPY docker-tools/start.sh /app/start.sh
-
-RUN chmod +x /app/bin/forkhammer
+COPY --chown=${OPENCODE_USER}:${OPENCODE_USER} docker-tools/start.sh /app/start.sh
 
 WORKDIR /app
 

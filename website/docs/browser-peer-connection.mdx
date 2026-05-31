@@ -1,0 +1,103 @@
+---
+sidebar_position: 6
+---
+
+# Browser Peer Connection
+
+Forkhammer uses [PeerJS](https://peerjs.com/) to establish a direct WebRTC data channel between the CLI worker and a browser client. This allows the browser to query the OpenCode API without exposing any ports.
+
+## How It Works
+
+Forkhammer does not run a server. Both ends are peers that connect through the PeerJS cloud for signaling.
+
+```
+Browser                              CLI Worker
+   |                                      |
+   |  1. new Peer('<random-id>')          |
+   |     connects to PeerJS cloud        |
+   |                                      |
+   |  2. INSERT browser_peer_ready       |
+   |     event into ultrafeed_item        |
+   |     (via Supabase)                   |
+   |                                      |
+   |                                      | 3. Supabase Realtime fires INSERT
+   |                                      |    → worker receives event
+   |                                      |    → peer store detects browser_peer_ready
+   |                                      |    → calls connectToBrowserPeer(peerId)
+   |     ← - - - - WebRTC data channel - - - - →
+   |                                      |
+   |  4. Send: { id, type: 'worktree.list' }
+   |                                      |
+   |                                      | 5. CLI calls OpenCode API
+   |                                      |    → returns worktree list
+   |  6. Receive: { id, type:            |
+   |       'worktree.list_response',      |
+   |       worktrees: [...] }            |
+```
+
+## Step-by-Step
+
+### 1. Browser connects to PeerJS cloud
+
+The browser creates a `Peer` instance with a randomly generated ID. This connects to the PeerJS public cloud (`wss://0.peerjs.com`) for signaling. The browser holds this peer connection open and waits for incoming messages.
+
+### 2. Browser signals readiness via Supabase
+
+The browser inserts a `browser_peer_ready` event into the `ultrafeed_item` table:
+
+```json
+{
+  "event_type": "browser_peer_ready",
+  "data": { "peerId": "<browser-peer-id>" }
+}
+```
+
+The `peerId` is the browser's PeerJS ID created in step 1.
+
+### 3. CLI connects to browser
+
+The Forkhammer worker listens to Supabase Realtime for `INSERT` events on `ultrafeed_item`. When it receives a `browser_peer_ready` event, the peer store extracts the `peerId` and calls `connectToBrowserPeer(peerId)`.
+
+This opens a WebRTC connection from CLI → Browser using PeerJS cloud as the signaling service. Only the CLI initiates the connection; the browser does not need to know the CLI's peer ID.
+
+### 4. Messaging over the data channel
+
+Once the WebRTC data channel is open, the browser and CLI communicate directly without any server in between. Messages are plain JSON:
+
+**Request:**
+```json
+{ "id": "1", "type": "worktree.list" }
+```
+
+**Response:**
+```json
+{ "id": "1", "type": "worktree.list_response", "worktrees": [...] }
+```
+
+**Error:**
+```json
+{ "id": "1", "type": "error", "message": "..." }
+```
+
+## Connection Lifecycle
+
+- Only **one** browser peer can be connected at a time.
+- When a new `browser_peer_ready` event arrives, any existing peer connection is closed before connecting to the new peer.
+- If the browser disconnects, the CLI simply waits for the next `browser_peer_ready` event.
+
+## Why This Design
+
+- **No ports to expose** — The CLI does not listen on any port. All connectivity is outbound from the CLI to the PeerJS cloud.
+- **Browser controls discovery** — The browser generates its own peer ID and announces it via the existing Supabase event infrastructure.
+- **Direct P2P data** — After connection establishment, all data flows directly over WebRTC. PeerJS cloud is only used for signaling, not for the actual API calls.
+- **Uses existing infrastructure** — Supabase Realtime is already in place for the event log; the browser peer system piggybacks on it rather than adding a separate mechanism.
+
+## Browser Client Implementation
+
+The browser client lives in a separate repository. It only needs to:
+
+1. `import Peer from 'peerjs'`
+2. Create a peer with a random ID, wait for open
+3. Insert `browser_peer_ready` into `ultrafeed_item` with that ID
+4. Connect to the CLI peer when instructed
+5. Send messages and handle responses over the data channel

@@ -14,6 +14,7 @@ describe("ultrafeed events", () => {
         "validate_issue_prompt_failed",
         "issue_validated",
         "issue_validation_failed",
+        "browser_peer_ready",
       ],
     );
   });

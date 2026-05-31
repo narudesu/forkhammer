@@ -6,39 +6,43 @@ import { tmpdir } from "node:os";
 import { createTestExecutionContext } from "./test-utils";
 import { createMessageCounterStore } from "./stores/message-counter-store";
 import { createValidationStore } from "./stores/validation-store";
-import { getReplayCursor, hydrateStores } from "./state-manager";
+import { hydrateStores } from "./state-manager";
 import {
   getStateStoreDir,
-  readStoreSnapshot,
-  writeStoreSnapshot,
+  readStateSnapshotBundle,
+  writeStateSnapshotBundle,
 } from "./persistence";
 
 describe("worker persistence", () => {
-  it("round-trips store snapshots in the xdg state dir", async () => {
+  it("round-trips the atomic snapshot bundle in the xdg state dir", async () => {
     const previousForkhammer = process.env.FORKHAMMER_STATE_DIR;
     const stateHome = await mkdtemp(join(tmpdir(), "forkhammer-state-"));
     process.env.FORKHAMMER_STATE_DIR = stateHome;
 
     try {
-      const snapshot = {
+      const bundle = {
         version: 1 as const,
         cursor: {
           created_at: "2026-01-01T00:00:01.000Z",
           id: "1",
         },
-        reducedEventsSinceSnapshot: 3,
-        state: {
-          totalReceived: 7,
-          lastEventId: "1",
-          lastEventType: "validate_issue_requested",
+        stores: {
+          "message-counter": {
+            version: 1 as const,
+            reducedEventsSinceSnapshot: 3,
+            state: {
+              totalReceived: 7,
+              lastEventId: "1",
+              lastEventType: "validate_issue_requested",
+            },
+          },
         },
       };
 
-      await writeStoreSnapshot("message-counter", snapshot);
-      const loaded =
-        await readStoreSnapshot<typeof snapshot.state>("message-counter");
+      await writeStateSnapshotBundle(bundle);
+      const loaded = await readStateSnapshotBundle();
 
-      assert.deepEqual(loaded, snapshot);
+      assert.deepEqual(loaded, bundle);
       assert.equal(getStateStoreDir().startsWith(stateHome), true);
     } finally {
       process.env.FORKHAMMER_STATE_DIR = previousForkhammer;
@@ -46,49 +50,49 @@ describe("worker persistence", () => {
     }
   });
 
-  it("hydrates stores and computes the earliest replay cursor", async () => {
+  it("hydrates stores and returns the shared replay cursor", async () => {
     const previousForkhammer = process.env.FORKHAMMER_STATE_DIR;
     const stateHome = await mkdtemp(join(tmpdir(), "forkhammer-state-"));
     process.env.FORKHAMMER_STATE_DIR = stateHome;
 
     try {
-      await writeStoreSnapshot("validation", {
+      await writeStateSnapshotBundle({
         version: 1 as const,
         cursor: {
           created_at: "2026-01-01T00:00:02.000Z",
           id: "2",
         },
-        reducedEventsSinceSnapshot: 0,
-        state: {
-          issues: {},
-        },
-      });
-
-      await writeStoreSnapshot("message-counter", {
-        version: 1 as const,
-        cursor: {
-          created_at: "2026-01-01T00:00:01.000Z",
-          id: "1",
-        },
-        reducedEventsSinceSnapshot: 0,
-        state: {
-          totalReceived: 1,
-          lastEventId: "1",
-          lastEventType: "validate_issue_requested",
+        stores: {
+          validation: {
+            version: 1 as const,
+            reducedEventsSinceSnapshot: 0,
+            state: {
+              issues: {},
+            },
+          },
+          "message-counter": {
+            version: 1 as const,
+            reducedEventsSinceSnapshot: 0,
+            state: {
+              totalReceived: 1,
+              lastEventId: "1",
+              lastEventType: "validate_issue_requested",
+            },
+          },
         },
       });
 
       const ctx = createTestExecutionContext();
-      const stores: Array<any> = [
+      const stores = [
         createValidationStore(ctx),
         createMessageCounterStore(ctx),
       ];
 
-      await hydrateStores(stores);
+      const cursor = await hydrateStores(stores);
 
-      assert.deepEqual(getReplayCursor(stores), {
-        created_at: "2026-01-01T00:00:01.000Z",
-        id: "1",
+      assert.deepEqual(cursor, {
+        created_at: "2026-01-01T00:00:02.000Z",
+        id: "2",
       });
     } finally {
       process.env.FORKHAMMER_STATE_DIR = previousForkhammer;

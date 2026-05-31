@@ -8,7 +8,6 @@ import {
   hydrateStores,
   loadBackfillEvents,
   persistDueSnapshots,
-  getReplayCursor,
 } from "./state-manager";
 
 type PendingResolver = (event: FeedEvent | null) => void;
@@ -77,6 +76,9 @@ export async function runRealtimeSubscription(
     const buffer = new EventBuffer();
     const stores = options.createStores?.(ctx) ?? createWorkerStores(ctx);
     const seenEventIds = new Set<string>();
+    const cursor = {
+      current: null as { created_at: string; id: string } | null,
+    };
 
     const channel = ctx.supabase.client.channel(REALTIME_CHANNEL_NAME).on(
       "postgres_changes",
@@ -105,7 +107,7 @@ export async function runRealtimeSubscription(
       buffer.close();
       ctx.log.debug("stopping realtime subscription: %s", reason);
       await activeChannel.unsubscribe();
-      resolve({ unauthorized });
+      resolve({ unauthorized, processed: false });
     };
 
     const startProcessing = async () => {
@@ -116,9 +118,8 @@ export async function runRealtimeSubscription(
       processingStarted = true;
 
       try {
-        await hydrateStores(stores);
-        const replayCursor = getReplayCursor(stores);
-        const snapshotEvents = await loadBackfillEvents(ctx, replayCursor);
+        cursor.current = await hydrateStores(stores);
+        const snapshotEvents = await loadBackfillEvents(ctx, cursor.current);
         ctx.log.debug("loaded %d backfill events", snapshotEvents.length);
 
         if (stopped) {
@@ -130,10 +131,10 @@ export async function runRealtimeSubscription(
             return;
           }
 
-          await processEvent(ctx, event, stores, seenEventIds, {
+          await processEvent(ctx, event, stores, seenEventIds, cursor, {
             reconcile: false,
           });
-          await persistDueSnapshots(stores);
+          await persistDueSnapshots(stores, cursor.current);
         }
 
         let bufferedEvents = buffer.drain();
@@ -147,10 +148,10 @@ export async function runRealtimeSubscription(
               return;
             }
 
-            await processEvent(ctx, event, stores, seenEventIds, {
+            await processEvent(ctx, event, stores, seenEventIds, cursor, {
               reconcile: false,
             });
-            await persistDueSnapshots(stores);
+            await persistDueSnapshots(stores, cursor.current);
           }
 
           bufferedEvents = buffer.drain();
@@ -161,8 +162,8 @@ export async function runRealtimeSubscription(
         }
 
         ctx.log.debug("projection caught up; reconciling stores");
-        await reconcileStores(stores);
-        await persistDueSnapshots(stores);
+        await reconcileStores(ctx, stores);
+        await persistDueSnapshots(stores, cursor.current);
 
         while (!stopped) {
           const event = await buffer.next();
@@ -170,10 +171,10 @@ export async function runRealtimeSubscription(
             break;
           }
 
-          await processEvent(ctx, event, stores, seenEventIds, {
+          await processEvent(ctx, event, stores, seenEventIds, cursor, {
             reconcile: true,
           });
-          await persistDueSnapshots(stores);
+          await persistDueSnapshots(stores, cursor.current);
         }
       } catch (error) {
         ctx.log.debug("realtime pipeline error %o", error);
