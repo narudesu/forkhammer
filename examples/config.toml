@@ -15,6 +15,9 @@ url = "https://your-jira-instance.atlassian.net"
 # https://id.atlassian.com/manage-profile/security/api-tokens
 auth = "email@example.com:api_token"
 
+[jira.filters.inbox]
+# filter_id = "12345"
+
 # under the project key, list all jira project you want to work on
 # this is so that forkhammer knows which issue key belongs to which directory
 [project.my-project]

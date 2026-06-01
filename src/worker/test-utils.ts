@@ -1,6 +1,14 @@
 import type { ExecutionContext } from "./context";
 
-type Overrides = Partial<ExecutionContext>;
+type Overrides = {
+  config?: Partial<ExecutionContext["config"]>;
+  jira?: ExecutionContext["jira"];
+  supabase?: Partial<ExecutionContext["supabase"]>;
+  runtime?: Partial<ExecutionContext["runtime"]>;
+  log?: Partial<ExecutionContext["log"]>;
+  auth?: Partial<ExecutionContext["auth"]>;
+  validation?: Partial<ExecutionContext["validation"]>;
+};
 
 export function createTestExecutionContext(
   calls: string[] = [],
@@ -46,6 +54,7 @@ export function createTestExecutionContext(
         }),
       },
       setAccessToken: () => {},
+      getUserId: async () => "user-1",
     },
     auth: {
       login: async () => "token",

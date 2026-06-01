@@ -57,7 +57,7 @@ export type SupabaseClientLike = {
   from: (table: string) => {
     select: (columns: string) => SupabaseSelectQueryLike;
     insert: (
-      rows: Array<{ event_type: string; data: Record<string, unknown> }>,
+      rows: Array<Record<string, unknown>>,
     ) => Promise<{ error: { message: string } | null }>;
   };
 };

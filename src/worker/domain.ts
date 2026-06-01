@@ -1,4 +1,4 @@
-import { REQUEST_EVENT_TYPE, WORKER_EMITTED_EVENT_TYPES } from "./constants";
+import { REQUEST_EVENT_TYPES, WORKER_EMITTED_EVENT_TYPES } from "./constants";
 import { parseUltrafeedEventData } from "./events";
 import type { FeedEvent } from "./types";
 
@@ -7,12 +7,12 @@ export function isWorkerEmittedEventType(eventType: string) {
 }
 
 export function isSupportedRequestEventType(eventType: string) {
-  return eventType === REQUEST_EVENT_TYPE;
+  return REQUEST_EVENT_TYPES.has(eventType);
 }
 
 export function getIssueKey(event: FeedEvent) {
   const parsed = parseUltrafeedEventData(event.event_type, event.data);
-  const value = parsed?.issue_key;
+  const value = parsed && "issue_key" in parsed ? parsed.issue_key : null;
 
   return typeof value === "string" && value.length > 0 ? value : null;
 }

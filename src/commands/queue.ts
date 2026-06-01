@@ -27,7 +27,7 @@ type QueueContext = {
 };
 
 type ParsedQueueEvent = FeedEvent & {
-  data: UltrafeedEventData;
+  data: UltrafeedEventData<"validate_issue_requested">;
 };
 
 export async function runQueueAdd(issueKey: string, json = false) {
@@ -134,7 +134,9 @@ export async function runQueueRead(issueKey: string, json = false) {
 
   if (latestCompleted && latestCompleted.id !== latest.id) {
     console.log(chalk.green("\nLatest completed validation plan:"));
-    printValidationResult(latestCompleted.data as ValidationStructuredResult);
+    printValidationResult(
+      latestCompleted.data as unknown as ValidationStructuredResult,
+    );
   } else if (!latestCompleted) {
     console.log(chalk.yellow("\nNo completed validation plan found yet."));
   }
@@ -238,7 +240,11 @@ function toQueueEventSummary(event: ParsedQueueEvent) {
 function formatQueueListRow(event: ParsedQueueEvent) {
   const detail =
     event.event_type === "issue_validated"
-      ? ` ${chalk.gray(shortenValidationSummary(event.data as { summary: string }))}`
+      ? ` ${chalk.gray(
+          shortenValidationSummary(
+            event.data as unknown as { summary: string },
+          ),
+        )}`
       : "";
 
   return `${chalk.gray(event.created_at)}  ${chalk.bold(event.data.issue_key)}  ${formatEventStatus(event.event_type)}${detail}`;

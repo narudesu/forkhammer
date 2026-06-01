@@ -20,6 +20,15 @@ const zConfig = z.object({
     .object({
       auth: z.string(),
       url: z.string(),
+      filters: z
+        .object({
+          inbox: z
+            .object({
+              filter_id: z.string().min(1).optional(),
+            })
+            .optional(),
+        })
+        .optional(),
     })
     .optional(),
   project: z.record(z.string(), zProjectConfig).optional(),

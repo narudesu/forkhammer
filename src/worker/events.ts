@@ -43,6 +43,10 @@ const zValidateIssueRequestedData = z.object({
   issue_key: zIssueKey,
 });
 
+const zArtifactRefreshRequestedData = z.object({
+  type: z.literal("jira_inbox"),
+});
+
 const zValidateIssueStartedData = z.object({
   ...zValidationSessionContext.shape,
   issue_summary: z.string(),
@@ -134,6 +138,11 @@ export const ultrafeedEventDefinitions = [
       "A browser peer is connected via PeerJS and ready to receive responses.",
     dataSchema: zBrowserPeerReadyData,
   },
+  {
+    eventType: "artifact_refresh_requested",
+    description: "A request to refresh a Jira inbox artifact snapshot.",
+    dataSchema: zArtifactRefreshRequestedData,
+  },
 ] as const;
 
 export const ultrafeedEventSchemas = {
@@ -145,9 +154,15 @@ export const ultrafeedEventSchemas = {
   issue_validated: zIssueValidatedData,
   issue_validation_failed: zIssueValidationFailedData,
   browser_peer_ready: zBrowserPeerReadyData,
+  artifact_refresh_requested: zArtifactRefreshRequestedData,
 } as const;
 
-export const ultrafeedRequestEventType = "validate_issue_requested" as const;
+export const ultrafeedRequestEventTypes = [
+  "validate_issue_requested",
+  "artifact_refresh_requested",
+] as const;
+
+export const ultrafeedRequestEventType = ultrafeedRequestEventTypes[0];
 
 export const ultrafeedWorkerEmittedEventTypes = [
   "validate_issue_started",

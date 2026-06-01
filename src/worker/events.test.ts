@@ -15,6 +15,7 @@ describe("ultrafeed events", () => {
         "issue_validated",
         "issue_validation_failed",
         "browser_peer_ready",
+        "artifact_refresh_requested",
       ],
     );
   });
@@ -102,6 +103,18 @@ describe("ultrafeed events", () => {
         request_event_id: "evt-1",
         prompt: "Add a follow up note",
         response: { ok: true },
+      },
+    );
+  });
+
+  it("parses artifact refresh requests", () => {
+    assert.deepEqual(
+      parseUltrafeedEventData("artifact_refresh_requested", {
+        type: "jira_inbox",
+        extra: "ignored",
+      }),
+      {
+        type: "jira_inbox",
       },
     );
   });

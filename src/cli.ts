@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import { runJiraInbox } from "./commands/jira";
 import { runQueueAdd, runQueueList, runQueueRead } from "./commands/queue";
 import { runWorker } from "./worker";
 
@@ -20,6 +21,15 @@ async function runCli() {
   const queue = program
     .command("queue")
     .description("Inspect the Supabase event queue");
+
+  const jira = program.command("jira").description("Inspect Jira data");
+
+  jira
+    .command("inbox")
+    .description("Fetch and print the configured Jira inbox issues")
+    .action(async () => {
+      await runJiraInbox();
+    });
 
   queue
     .command("add <issue-key>")

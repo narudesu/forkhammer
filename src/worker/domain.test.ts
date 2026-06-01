@@ -16,6 +16,10 @@ describe("worker domain", () => {
 
   it("detects supported request event type", () => {
     assert.equal(isSupportedRequestEventType("validate_issue_requested"), true);
+    assert.equal(
+      isSupportedRequestEventType("artifact_refresh_requested"),
+      true,
+    );
     assert.equal(isSupportedRequestEventType("other"), false);
   });
 
@@ -81,6 +85,17 @@ describe("worker domain", () => {
         data: {},
       }),
       null,
+    );
+  });
+
+  it("parses artifact refresh payloads", () => {
+    assert.deepEqual(
+      parseUltrafeedEventData("artifact_refresh_requested", {
+        type: "jira_inbox",
+      }),
+      {
+        type: "jira_inbox",
+      },
     );
   });
 
