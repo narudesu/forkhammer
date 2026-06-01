@@ -2,13 +2,8 @@
 
 # ---- Stage 1: build a patched opencode binary from source ----
 ARG ALPINE_VERSION=3.20
-ARG BUN_VERSION=1.3.14
-ARG OPENCODE_REF=dev
 
 FROM alpine:${ALPINE_VERSION} AS opencode-builder
-
-ARG BUN_VERSION
-ARG OPENCODE_REF
 
 RUN apk add --no-cache \
     bash \
@@ -22,22 +17,16 @@ RUN apk add --no-cache \
 ENV BUN_INSTALL=/opt/bun
 ENV PATH=/opt/bun/bin:$PATH
 
+ARG BUN_VERSION=1.3.14
 RUN curl -fsSL https://bun.sh/install | bash -s -- "bun-v${BUN_VERSION}"
 
 WORKDIR /build
 
+ARG OPENCODE_REF=dev
 # Shallow clone + checkout the requested ref
-RUN git clone --depth 1 https://github.com/anomalyco/opencode.git . \
+RUN git clone --depth 1 https://github.com/narudesu/forkhammer-opencode.git . \
  && git fetch --depth 1 origin ${OPENCODE_REF} \
  && git checkout FETCH_HEAD
-
-# Apply local patches
-COPY docker-tools/patches/ /tmp/patches/
-RUN set -eu; for p in /tmp/patches/*.patch; do \
-      [ -f "$p" ] || continue; \
-      echo ">>> applying $p"; \
-      git apply --3way "$p"; \
-    done
 
 # Install workspace deps with the lockfile
 RUN bun install --frozen-lockfile

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eu
 
-opencode serve --hostname "0.0.0.0" --port "8000" &
+opencode serve --hostname "0.0.0.0" --port "8000" --print-logs &
 OPENCODE_PID=$!
 
 bun run /app/forkhammer/src/cli.ts start-worker &
