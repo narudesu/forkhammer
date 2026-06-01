@@ -1,0 +1,13 @@
+diff --git a/packages/opencode/src/session/session.ts b/packages/opencode/src/session/session.ts
+index e84da3340..2d216ef1c 100644
+--- a/packages/opencode/src/session/session.ts
++++ b/packages/opencode/src/session/session.ts
+@@ -932,7 +932,7 @@ function* listByProject(
+           : or(...conds)!,
+       )
+     }
+-  } else if (input.scope !== "project" && !input.experimentalWorkspaces) {
++  } else if (input.scope !== "project") {
+     if (input.directory) {
+       conditions.push(eq(SessionTable.directory, input.directory))
+     }
