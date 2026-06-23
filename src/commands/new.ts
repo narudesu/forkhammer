@@ -1,4 +1,4 @@
-import { createOpencodeClient } from "@opencode-ai/sdk/v2";
+import { createOpencodeClient, type PermissionRuleset } from "@opencode-ai/sdk/v2";
 import chalk from "chalk";
 import { execa } from "execa";
 import path from "node:path";
@@ -50,6 +50,14 @@ type ModelConfig = {
   providerID: string;
   modelID: string;
 };
+
+const ALLOW_ALL_PERMISSIONS: PermissionRuleset = [
+  {
+    permission: "*",
+    pattern: "*",
+    action: "allow",
+  },
+];
 
 type ValidationEventHooks = {
   onStarted?: (
@@ -156,6 +164,7 @@ export async function runIssueValidation(input: {
       .create({
         directory: worktree.directory,
         title: `${issue.key} - ${issue.summary}`,
+        permission: ALLOW_ALL_PERMISSIONS,
       })
       .then(unwrapOpencodeData);
 
@@ -270,6 +279,14 @@ export async function runIssuePrompt(input: {
         `session-directory-mismatch:${input.sessionId}:${session.directory}:${input.worktreeDirectory}`,
       );
     }
+
+    await client.session
+      .update({
+        sessionID: input.sessionId,
+        directory: input.worktreeDirectory,
+        permission: ALLOW_ALL_PERMISSIONS,
+      })
+      .then(unwrapOpencodeData);
 
     const response = await client.session
       .prompt({

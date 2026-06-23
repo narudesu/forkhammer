@@ -175,7 +175,6 @@ export function createValidationStore(
       },
     async reconcile() {
       let mutated = false;
-      const dispatches: Array<Promise<void>> = [];
 
       for (const [issueKey, issue] of Object.entries(state.issues)) {
         for (const promptRequest of Object.values(issue.promptRequests)) {
@@ -186,36 +185,34 @@ export function createValidationStore(
           promptRequest.dispatched = true;
           mutated = true;
 
-          dispatches.push(
-            (async () => {
-              try {
-                ctx.log.debug(
-                  `${storeLabel} ${sideEffectLabel} dispatching prompt for ${chalk.green(issueKey)} (${chalk.white(promptRequest.requestEventId)})`,
-                );
-                await ctx.validation.runIssuePrompt({
-                  issueKey,
-                  requestEventId: promptRequest.requestEventId,
-                  prompt: promptRequest.prompt,
-                  projectKey: promptRequest.projectKey,
-                  projectName: promptRequest.projectName,
-                  projectId: promptRequest.projectId,
-                  sessionId: promptRequest.sessionId,
-                  worktreeName: promptRequest.worktreeName,
-                  worktreeBranch: promptRequest.worktreeBranch,
-                  worktreeDirectory: promptRequest.worktreeDirectory,
-                });
-                ctx.log.debug(
-                  `${storeLabel} ${successLabel} dispatched prompt for ${chalk.green(issueKey)} (${chalk.white(promptRequest.requestEventId)})`,
-                );
-              } catch (error) {
-                issue.lastPromptError =
-                  error instanceof Error ? error.message : String(error);
-                ctx.log.error(
-                  `${storeLabel} ${failureLabel} prompt for ${chalk.green(issueKey)} (${chalk.white(promptRequest.requestEventId)}): ${chalk.red(issue.lastPromptError)}`,
-                );
-              }
-            })(),
-          );
+          void (async () => {
+            try {
+              ctx.log.debug(
+                `${storeLabel} ${sideEffectLabel} dispatching prompt for ${chalk.green(issueKey)} (${chalk.white(promptRequest.requestEventId)})`,
+              );
+              await ctx.validation.runIssuePrompt({
+                issueKey,
+                requestEventId: promptRequest.requestEventId,
+                prompt: promptRequest.prompt,
+                projectKey: promptRequest.projectKey,
+                projectName: promptRequest.projectName,
+                projectId: promptRequest.projectId,
+                sessionId: promptRequest.sessionId,
+                worktreeName: promptRequest.worktreeName,
+                worktreeBranch: promptRequest.worktreeBranch,
+                worktreeDirectory: promptRequest.worktreeDirectory,
+              });
+              ctx.log.debug(
+                `${storeLabel} ${successLabel} dispatched prompt for ${chalk.green(issueKey)} (${chalk.white(promptRequest.requestEventId)})`,
+              );
+            } catch (error) {
+              issue.lastPromptError =
+                error instanceof Error ? error.message : String(error);
+              ctx.log.error(
+                `${storeLabel} ${failureLabel} prompt for ${chalk.green(issueKey)} (${chalk.white(promptRequest.requestEventId)}): ${chalk.red(issue.lastPromptError)}`,
+              );
+            }
+          })();
         }
 
         if (!issue.requestEventId || issue.started || issue.completed) {
@@ -229,29 +226,23 @@ export function createValidationStore(
         issue.dispatchedRequestEventId = issue.requestEventId;
         mutated = true;
 
-        dispatches.push(
-          (async () => {
-            try {
-              ctx.log.debug(
-                `${storeLabel} ${sideEffectLabel} dispatching validation for ${chalk.green(issueKey)}`,
-              );
-              await ctx.validation.runIssueValidation({ key: issueKey });
-              ctx.log.debug(
-                `${storeLabel} ${successLabel} dispatched validation for ${chalk.green(issueKey)}`,
-              );
-            } catch (error) {
-              issue.lastError =
-                error instanceof Error ? error.message : String(error);
-              ctx.log.error(
-                `${storeLabel} ${failureLabel} validation for ${chalk.green(issueKey)}: ${chalk.red(issue.lastError)}`,
-              );
-            }
-          })(),
-        );
-      }
-
-      if (dispatches.length > 0) {
-        await Promise.all(dispatches);
+        void (async () => {
+          try {
+            ctx.log.debug(
+              `${storeLabel} ${sideEffectLabel} dispatching validation for ${chalk.green(issueKey)}`,
+            );
+            await ctx.validation.runIssueValidation({ key: issueKey });
+            ctx.log.debug(
+              `${storeLabel} ${successLabel} dispatched validation for ${chalk.green(issueKey)}`,
+            );
+          } catch (error) {
+            issue.lastError =
+              error instanceof Error ? error.message : String(error);
+            ctx.log.error(
+              `${storeLabel} ${failureLabel} validation for ${chalk.green(issueKey)}: ${chalk.red(issue.lastError)}`,
+            );
+          }
+        })();
       }
 
       if (mutated) {

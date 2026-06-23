@@ -183,6 +183,66 @@ describe("validation store", () => {
       "error:[validation] failure validation for AT-123: validation failed",
     ]);
   });
+
+  it("starts multiple validations in parallel", async () => {
+    const calls: string[] = [];
+    let releaseFirst: () => void = () => {};
+    let releaseSecond: () => void = () => {};
+    const firstStarted = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const secondStarted = new Promise<void>((resolve) => {
+      releaseSecond = resolve;
+    });
+    const ctx = createTestExecutionContext(calls, {
+      validation: {
+        runIssueValidation: async ({ key }: { key: string }) => {
+          calls.push(`validation:start:${key}`);
+
+          if (key === "AT-123") {
+            await firstStarted;
+          } else {
+            await secondStarted;
+          }
+
+          calls.push(`validation:done:${key}`);
+        },
+      },
+    });
+    const store = createValidationStore(ctx);
+
+    store.reduce({
+      id: "1",
+      created_at: "2026-01-01",
+      event_type: "validate_issue_requested",
+      data: { issue_key: "AT-123" },
+    });
+    store.reduce({
+      id: "2",
+      created_at: "2026-01-01",
+      event_type: "validate_issue_requested",
+      data: { issue_key: "AT-124" },
+    });
+
+    const reconcile = store.reconcile();
+    await Promise.resolve();
+
+    assert.deepEqual(calls, [
+      "validation:start:AT-123",
+      "validation:start:AT-124",
+    ]);
+
+    releaseFirst();
+    releaseSecond();
+    await reconcile;
+
+    assert.deepEqual(calls, [
+      "validation:start:AT-123",
+      "validation:start:AT-124",
+      "validation:done:AT-123",
+      "validation:done:AT-124",
+    ]);
+  });
 });
 
 function stripAnsi(value: string): string {

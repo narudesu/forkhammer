@@ -1,15 +1,10 @@
+import debug from "debug";
 import Peer, { type DataConnection } from "peerjs";
 import type {
+  MessageHandlerRegistry,
   PeerMessage,
   WorktreeInfo,
-  MessageHandlerRegistry,
-} from "./peer-protocol";
-import {
-  applyHandlers,
-  createMessageHandlerRegistry,
-  registerHandler,
-} from "./peer-protocol";
-import debug from "debug";
+} from "src/peer-protocol";
 
 export type WorktreeLister = () => Promise<WorktreeInfo[]>;
 
@@ -19,28 +14,24 @@ export interface PeerClient {
   connect(peerId: string): void;
   disconnect(): void;
   send(msg: PeerMessage): void;
-  onMessage(handler: (msg: PeerMessage) => void): void;
   onDisconnect(handler: () => void): void;
+  register(
+    type: PeerMessage["type"],
+    handler: (msg: PeerMessage) => void,
+  ): void;
 }
 
 export function createPeerClient(options?: {
   peer?: Peer;
   createPeer?: () => Peer;
-  listWorktrees?: WorktreeLister;
 }): PeerClient {
   let peerInstance: Peer | null = options?.peer ?? null;
   let peerEventsBound = false;
   const createPeer = options?.createPeer ?? createPeerInstance;
-  let listWorktrees: WorktreeLister =
-    options?.listWorktrees ?? defaultListWorktrees;
   let activeConnection: DataConnection | null = null;
-  let messageHandlers: MessageHandlerRegistry = createMessageHandlerRegistry(
-    {},
-  );
-  let disconnectHandlers: Array<() => void> = [];
-  let browserPeerId: string | null = null;
+  let messageHandlers: MessageHandlerRegistry = {};
+  const disconnectHandlers: Array<() => void> = [];
   let pendingPeerId: string | null = null;
-  let messageHandler: ((msg: PeerMessage) => void) | null = null;
 
   bindPeerEvents();
 
@@ -92,21 +83,20 @@ export function createPeerClient(options?: {
   }
 
   function handleIncomingMessage(msg: PeerMessage): void {
-    applyHandlers(messageHandlers, msg);
-    if (messageHandler) {
-      messageHandler(msg);
-    }
+    messageHandlers[msg.type]?.(msg);
   }
 
   function handleConnectionOpen(conn: DataConnection): void {
     log("connection open");
-    conn.on("data", handleIncomingMessage);
+
+    conn.on("data", (message) => {
+      handleIncomingMessage(message as PeerMessage);
+    });
 
     conn.on("close", () => {
       log("connection close");
       if (activeConnection === conn) {
         activeConnection = null;
-        browserPeerId = null;
         for (const handler of disconnectHandlers) {
           handler();
         }
@@ -128,8 +118,6 @@ export function createPeerClient(options?: {
       activeConnection = null;
     }
 
-    browserPeerId = peerId;
-
     if (!isPeerOpen(peerInstance)) {
       log("peer is not open, returning");
       return;
@@ -140,7 +128,7 @@ export function createPeerClient(options?: {
   }
 
   function establishConnection(peerId: string): void {
-    const conn = peerInstance!.connect(peerId);
+    const conn = peerInstance?.connect(peerId);
     log("establishing connection", { peerId });
     if (!conn) {
       pendingPeerId = peerId;
@@ -156,12 +144,11 @@ export function createPeerClient(options?: {
     if (activeConnection) {
       activeConnection.close();
       activeConnection = null;
-      browserPeerId = null;
     }
   }
 
   function send(msg: PeerMessage): void {
-    if (!activeConnection || !activeConnection.open) {
+    if (!activeConnection?.open) {
       return;
     }
     activeConnection.send(msg);
@@ -171,49 +158,17 @@ export function createPeerClient(options?: {
     type: PeerMessage["type"],
     handler: (msg: PeerMessage) => void,
   ): void {
-    messageHandlers = registerHandler(messageHandlers, type, handler);
-  }
-
-  function onMessage(handler: (msg: PeerMessage) => void): void {
-    messageHandler = handler;
+    messageHandlers = { ...messageHandlers, [type]: handler };
   }
 
   function onDisconnect(handler: () => void): void {
     disconnectHandlers.push(handler);
   }
 
-  async function handleWorktreeList(
-    msg: PeerMessage,
-    sendResponse: (msg: PeerMessage) => void,
-  ): Promise<void> {
-    if (msg.type !== "worktree.list") {
-      return;
-    }
-    try {
-      const worktrees = await listWorktrees();
-      sendResponse({
-        id: msg.id,
-        type: "worktree.list_response",
-        worktrees,
-      });
-    } catch (error) {
-      sendResponse({
-        id: msg.id,
-        type: "error",
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  register("worktree.list", (msg) => {
-    handleWorktreeList(msg, send);
-  });
-
   return {
     connect,
     disconnect,
     send,
-    onMessage,
     onDisconnect,
     register,
   };
@@ -246,25 +201,3 @@ function formatPeerError(error: unknown): Record<string, unknown> {
 
   return { message: String(error) };
 }
-
-export async function defaultListWorktrees(): Promise<WorktreeInfo[]> {
-  const { createOpencodeClient } = await import("@opencode-ai/sdk/v2");
-  const { unwrapOpencodeData } = await import("./opencode");
-  const client = createOpencodeClient({
-    baseUrl: "http://localhost:8000",
-  });
-  const worktrees = await client.worktree.list().then(unwrapOpencodeData);
-  return worktrees.map((wt) => {
-    if (typeof wt === "string") {
-      return { path: wt, branch: wt };
-    }
-    const record = wt as Record<string, unknown>;
-    return {
-      path: (record.directory as string) ?? (wt as string),
-      branch: (record.branch as string) ?? (wt as string),
-      name: record.name as string | undefined,
-    };
-  });
-}
-
-export { createMessageHandlerRegistry, registerHandler, applyHandlers };

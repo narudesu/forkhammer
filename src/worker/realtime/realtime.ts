@@ -1,80 +1,29 @@
-import { REALTIME_CHANNEL_NAME } from "./constants";
-import type { ExecutionContext } from "./context";
-import { processEvent, reconcileStores } from "./event-processor";
-import type { FeedEvent, ProcessResult, RealtimeChannelLike } from "./types";
-import { createWorkerStores } from "./stores/registry";
-import type { WorkerStore } from "./stores/types";
+import { RealtimeEventBuffer } from "src/worker/realtime/event-buffer";
+import { REALTIME_CHANNEL_NAME } from "../constants";
+import type { ExecutionContext } from "../context";
+import { processEvent, reconcileStores } from "../event-processor";
 import {
   hydrateStores,
   loadBackfillEvents,
   persistDueSnapshots,
-} from "./state-manager";
+} from "../state-manager";
+import type { WorkerStore } from "../stores/types";
+import type { ProcessResult, RealtimeChannelLike } from "../types";
 
-type PendingResolver = (event: FeedEvent | null) => void;
-
-class EventBuffer {
-  private readonly events: Array<FeedEvent> = [];
-
-  private readonly waiters: Array<PendingResolver> = [];
-
-  private closed = false;
-
-  push(event: FeedEvent) {
-    if (this.closed) {
-      return;
-    }
-
-    const waiter = this.waiters.shift();
-    if (waiter) {
-      waiter(event);
-      return;
-    }
-
-    this.events.push(event);
-  }
-
-  drain() {
-    const drained = [...this.events];
-    this.events.length = 0;
-    return drained;
-  }
-
-  next() {
-    const queued = this.events.shift();
-    if (queued) {
-      return Promise.resolve(queued);
-    }
-
-    if (this.closed) {
-      return Promise.resolve(null);
-    }
-
-    return new Promise<FeedEvent | null>((resolve) => {
-      this.waiters.push(resolve);
-    });
-  }
-
-  close() {
-    this.closed = true;
-
-    while (this.waiters.length > 0) {
-      const waiter = this.waiters.shift();
-      waiter?.(null);
-    }
-  }
+export interface RealtimeSubscriptionOptions {
+  createStores: (ctx: ExecutionContext) => Array<WorkerStore<unknown>>;
 }
 
 export async function runRealtimeSubscription(
   ctx: ExecutionContext,
-  options: {
-    createStores?: (ctx: ExecutionContext) => Array<WorkerStore<any>>;
-  } = {},
+  options: RealtimeSubscriptionOptions,
 ): Promise<ProcessResult> {
   return new Promise<ProcessResult>((resolve) => {
     let stopped = false;
     let processingStarted = false;
-    const buffer = new EventBuffer();
-    const stores = options.createStores?.(ctx) ?? createWorkerStores(ctx);
+
+    const buffer = new RealtimeEventBuffer();
+    const stores = options.createStores(ctx);
     const seenEventIds = new Set<string>();
     const cursor = {
       current: null as { created_at: string; id: string } | null,
