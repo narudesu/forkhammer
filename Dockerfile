@@ -75,7 +75,7 @@ COPY --chown=${OPENCODE_USER}:${OPENCODE_USER} docker-tools/install-bun.sh /app/
 RUN bash /app/install-bun.sh
 
 WORKDIR /app/forkhammer
-COPY --chown=${OPENCODE_USER}:${OPENCODE_USER} package.json bun.lock ./
+COPY --chown=${OPENCODE_USER}:${OPENCODE_USER} package.json bun.lock tsconfig.json ./
 RUN bun install --frozen-lockfile
 
 COPY --chown=${OPENCODE_USER}:${OPENCODE_USER} src ./src

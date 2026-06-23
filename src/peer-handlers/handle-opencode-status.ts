@@ -1,19 +1,20 @@
-import {
-  createDefaultOpencodeClientV2,
-  unwrapOpencodeData,
-} from "src/opencode";
+import type {
+  Message,
+  Part,
+  Project,
+  Session,
+  SessionMessage,
+  SessionMessagesResponses,
+  SessionStatus,
+} from "@opencode-ai/sdk/v2";
+import { createDefaultOpencodeClient, unwrapOpencodeData } from "src/opencode";
 import type {
   OpencodeProjectStatus,
   OpencodeSessionMessageStatus,
   OpencodeSessionStatus,
   PeerMessage,
 } from "src/peer-protocol";
-import type {
-  Project,
-  Session,
-  SessionMessage,
-  SessionStatus,
-} from "@opencode-ai/sdk/v2";
+import { runBlock } from "src/worker/run-block";
 
 export async function handleOpencodeStatus(
   msg: PeerMessage,
@@ -42,7 +43,7 @@ export async function handleOpencodeStatus(
 export async function getOpencodeStatus(): Promise<{
   projects: OpencodeProjectStatus[];
 }> {
-  const client = createDefaultOpencodeClientV2();
+  const client = createDefaultOpencodeClient();
   const [projects, sessionStatuses] = await Promise.all([
     client.project.list().then(unwrapOpencodeData),
     client.session.status().then(unwrapOpencodeData),
@@ -56,7 +57,7 @@ export async function getOpencodeStatus(): Promise<{
 }
 
 async function mapProject(
-  client: ReturnType<typeof createDefaultOpencodeClientV2>,
+  client: ReturnType<typeof createDefaultOpencodeClient>,
   project: Project,
   sessionStatuses: Record<string, SessionStatus>,
 ): Promise<OpencodeProjectStatus> {
@@ -75,7 +76,7 @@ async function mapProject(
 }
 
 async function listSandboxSessions(
-  client: ReturnType<typeof createDefaultOpencodeClientV2>,
+  client: ReturnType<typeof createDefaultOpencodeClient>,
   sandbox: string,
   sessionStatuses: Record<string, SessionStatus>,
 ): Promise<OpencodeSessionStatus[]> {
@@ -110,44 +111,45 @@ async function listSandboxSessions(
 }
 
 async function listSessionMessages(
-  client: ReturnType<typeof createDefaultOpencodeClientV2>,
+  client: ReturnType<typeof createDefaultOpencodeClient>,
   session: Session,
 ): Promise<OpencodeSessionMessageStatus[]> {
-  const response = await client.v2.session
-    .messages({ sessionID: session.id, order: "asc" })
+  const response = await client.session
+    .messages({ sessionID: session.id, limit: 100 })
     .then(unwrapOpencodeData);
 
-  return response.items.flatMap(mapMessage);
+  return response.flatMap(mapMessage);
 }
 
-function mapMessage(message: SessionMessage): OpencodeSessionMessageStatus[] {
-  if (message.type === "user") {
-    const text = message.text.trim();
-
-    return text ? [{ role: "user", text }] : [];
+function mapMessage(message: {
+  info: Message;
+  parts: Array<Part>;
+}): OpencodeSessionMessageStatus[] {
+  if (message.info.role === "user") {
+    return message.parts.flatMap((part) =>
+      part.type === "text" ? [{ role: "user", text: part.text }] : [],
+    );
   }
+  // message is from assistant
 
-  if (message.type !== "assistant") {
-    return [];
-  }
-
-  const stepFinishText = message.finish === "stop"
-    ? message.content
-        .filter((item) => item.type === "text")
-        .map((item) => item.text)
-        .join("\n")
-        .trim()
-    : "";
-  const outputPart = message.content.find(
-    (
-      item,
-    ): item is Extract<(typeof message.content)[number], { type: "tool" }> =>
-      item.type === "tool" && item.name === "StructuredOutput",
+  const stopPart = message.parts.find(
+    (part) => part.type === "step-finish" && part.reason === "stop",
+  );
+  const outputPart = message.parts.find(
+    (part): part is Extract<Part, { type: "tool" }> =>
+      part.type === "tool" && part.tool === "StructuredOutput",
   );
 
-  if (!stepFinishText && !outputPart) {
+  if (!stopPart && !outputPart) {
     return [];
   }
+
+  const stepFinishText = stopPart
+    ? message.parts
+        .map((part) => (part.type === "text" ? part.text : null))
+        .filter((x) => !!x)
+        .join("\n\n")
+    : null;
 
   return [
     {
@@ -158,10 +160,15 @@ function mapMessage(message: SessionMessage): OpencodeSessionMessageStatus[] {
   ];
 }
 
-function getSandboxName(projectId: string, sandbox: string): string | undefined {
+function getSandboxName(
+  projectId: string,
+  sandbox: string,
+): string | undefined {
   return sandbox.split(projectId)[1]?.replace(/^\//, "");
 }
 
-function isSessionProcessing(sessionStatus: SessionStatus | undefined): boolean {
+function isSessionProcessing(
+  sessionStatus: SessionStatus | undefined,
+): boolean {
   return sessionStatus?.type === "busy" || sessionStatus?.type === "retry";
 }

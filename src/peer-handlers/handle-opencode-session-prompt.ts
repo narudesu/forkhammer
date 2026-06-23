@@ -1,7 +1,4 @@
-import {
-  createDefaultOpencodeClientV2,
-  unwrapOpencodeData,
-} from "src/opencode";
+import { createDefaultOpencodeClient, unwrapOpencodeData } from "src/opencode";
 import type { PeerMessage } from "src/peer-protocol";
 
 export async function handleOpencodeSessionPrompt(
@@ -13,7 +10,7 @@ export async function handleOpencodeSessionPrompt(
   }
 
   try {
-    const client = createDefaultOpencodeClientV2();
+    const client = createDefaultOpencodeClient();
     const response = await client.v2.session
       .prompt({
         sessionID: msg.sessionId,

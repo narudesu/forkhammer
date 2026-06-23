@@ -1,3 +1,4 @@
+import { createPeerClient } from "src/peer-client";
 import type { ExecutionContext } from "../context";
 import { createJiraArtifactStore } from "./jira-artifact-store";
 import { createMessageCounterStore } from "./message-counter-store";
@@ -12,6 +13,6 @@ export function createWorkerStores(
     createValidationStore(ctx),
     createJiraArtifactStore(ctx),
     createMessageCounterStore(ctx),
-    createPeerStore(ctx),
+    createPeerStore(ctx, createPeerClient()),
   ];
 }
