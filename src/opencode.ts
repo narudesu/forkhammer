@@ -17,3 +17,9 @@ export function createDefaultOpencodeClient() {
     baseUrl: "http://localhost:8000",
   });
 }
+
+export function createDefaultOpencodeClientV2() {
+  return createOpencodeClient({
+    baseUrl: "http://localhost:8000",
+  });
+}

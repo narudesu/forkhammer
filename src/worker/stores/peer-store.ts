@@ -1,5 +1,7 @@
 import debug from "debug";
 import type { PeerClient } from "src/peer-client";
+import { handleOpencodeSessionPrompt } from "src/peer-handlers/handle-opencode-session-prompt";
+import { handleOpencodeStatus } from "src/peer-handlers/handle-opencode-status";
 import { handleWorktreeList } from "src/peer-handlers/handle-worktree-list";
 import type { ExecutionContext } from "src/worker/context";
 import type {
@@ -28,6 +30,12 @@ export function createPeerStore(
 
   client.register("worktree.list", (message) => {
     handleWorktreeList(message, client.send);
+  });
+  client.register("opencode.status", (message) => {
+    handleOpencodeStatus(message, client.send);
+  });
+  client.register("opencode.session.prompt", (message) => {
+    handleOpencodeSessionPrompt(message, client.send);
   });
 
   return {
