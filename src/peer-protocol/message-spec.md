@@ -59,6 +59,8 @@ interface OpencodeStatus {
   projects: OpencodeProjectStatus[]
 }
 
+type OpencodeAgent = 'plan' | 'build'
+
 interface OpencodeProjectStatus {
   id: string
   worktree: string
@@ -78,7 +80,9 @@ interface OpencodeSessionStatus {
   title: string
   directory: string
   processing: boolean
-  processingStatus?: 'idle' | 'busy' | 'retry'
+  processingStatus?: 'idle' | 'busy' | 'retry' | null
+  issueKey?: string | null
+  agent?: OpencodeAgent | null
   model?: {
     id: string
     providerID: string
@@ -113,7 +117,38 @@ type OpencodeSessionMessageStatus =
     }
 ```
 
+`opencode.session.create`
+
+Create a new OpenCode session in a selected sandbox/worktree and send the initial prompt.
+
+```ts
+interface Data {
+  id: string
+  type: 'opencode.session.create'
+  projectId: string
+  worktree: string
+  sandboxName: string
+  prompt: string
+  agent: OpencodeAgent
+  issueKey?: string
+}
+```
+
+`opencode.session.create_response`
+
+```ts
+interface Data {
+  id: string
+  type: 'opencode.session.create_response'
+  accepted: boolean
+  sessionId?: string
+  error?: string
+}
+```
+
 `opencode.session.prompt`
+
+Send a follow-up prompt to an existing OpenCode session. If `agent` is omitted, the worker preserves its default prompt behavior.
 
 ```ts
 interface Data {
@@ -122,6 +157,7 @@ interface Data {
   sessionId: string
   prompt: string
   delivery?: 'immediate' | 'deferred'
+  agent?: OpencodeAgent
 }
 ```
 

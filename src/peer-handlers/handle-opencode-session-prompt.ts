@@ -11,6 +11,25 @@ export async function handleOpencodeSessionPrompt(
 
   try {
     const client = createDefaultOpencodeClient();
+    if (msg.agent) {
+      const response = await client.session
+        .prompt({
+          sessionID: msg.sessionId,
+          agent: msg.agent,
+          parts: [{ type: "text", text: msg.prompt }],
+        })
+        .then(unwrapOpencodeData);
+
+      sendResponse({
+        id: msg.id,
+        type: "opencode.session.prompt_response",
+        sessionId: msg.sessionId,
+        accepted: true,
+        messageId: response.info.id,
+      });
+      return;
+    }
+
     const response = await client.v2.session
       .prompt({
         sessionID: msg.sessionId,

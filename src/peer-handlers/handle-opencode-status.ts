@@ -9,6 +9,7 @@ import type {
 } from "@opencode-ai/sdk/v2";
 import { createDefaultOpencodeClient, unwrapOpencodeData } from "src/opencode";
 import type {
+  OpencodeAgent,
   OpencodeProjectStatus,
   OpencodeSessionMessageStatus,
   OpencodeSessionStatus,
@@ -19,13 +20,14 @@ import { runBlock } from "src/worker/run-block";
 export async function handleOpencodeStatus(
   msg: PeerMessage,
   sendResponse: (msg: PeerMessage) => void,
+  metadata?: OpencodeSessionStatusMetadata,
 ): Promise<void> {
   if (msg.type !== "opencode.status") {
     return;
   }
 
   try {
-    const status = await getOpencodeStatus();
+    const status = await getOpencodeStatus(metadata);
     sendResponse({
       id: msg.id,
       type: "opencode.status_response",
@@ -40,7 +42,9 @@ export async function handleOpencodeStatus(
   }
 }
 
-export async function getOpencodeStatus(): Promise<{
+export async function getOpencodeStatus(
+  metadata?: OpencodeSessionStatusMetadata,
+): Promise<{
   projects: OpencodeProjectStatus[];
 }> {
   const client = createDefaultOpencodeClient();
@@ -51,7 +55,9 @@ export async function getOpencodeStatus(): Promise<{
 
   return {
     projects: await Promise.all(
-      projects.map((project) => mapProject(client, project, sessionStatuses)),
+      projects.map((project) =>
+        mapProject(client, project, sessionStatuses, metadata),
+      ),
     ),
   };
 }
@@ -60,6 +66,7 @@ async function mapProject(
   client: ReturnType<typeof createDefaultOpencodeClient>,
   project: Project,
   sessionStatuses: Record<string, SessionStatus>,
+  metadata?: OpencodeSessionStatusMetadata,
 ): Promise<OpencodeProjectStatus> {
   return {
     id: project.id,
@@ -69,7 +76,12 @@ async function mapProject(
       project.sandboxes.map(async (sandbox) => ({
         directory: sandbox,
         name: getSandboxName(project.id, sandbox),
-        sessions: await listSandboxSessions(client, sandbox, sessionStatuses),
+        sessions: await listSandboxSessions(
+          client,
+          sandbox,
+          sessionStatuses,
+          metadata,
+        ),
       })),
     ),
   };
@@ -79,6 +91,7 @@ async function listSandboxSessions(
   client: ReturnType<typeof createDefaultOpencodeClient>,
   sandbox: string,
   sessionStatuses: Record<string, SessionStatus>,
+  metadata?: OpencodeSessionStatusMetadata,
 ): Promise<OpencodeSessionStatus[]> {
   const sessions = await client.session
     .list({ directory: sandbox })
@@ -94,7 +107,9 @@ async function listSandboxSessions(
         title: session.title,
         directory: session.directory,
         processing: isSessionProcessing(sessionStatus),
-        processingStatus: sessionStatus?.type,
+        processingStatus: sessionStatus?.type ?? null,
+        issueKey: metadata?.issueKeys[session.id] ?? null,
+        agent: metadata?.agents[session.id] ?? null,
         model: session.model,
         tokens: session.tokens,
         summary: session.summary
@@ -109,6 +124,11 @@ async function listSandboxSessions(
     }),
   );
 }
+
+export type OpencodeSessionStatusMetadata = {
+  issueKeys: Record<string, string>;
+  agents: Record<string, OpencodeAgent>;
+};
 
 async function listSessionMessages(
   client: ReturnType<typeof createDefaultOpencodeClient>,

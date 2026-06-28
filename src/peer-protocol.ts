@@ -8,6 +8,8 @@ export interface OpencodeStatus {
   projects: OpencodeProjectStatus[];
 }
 
+export type OpencodeAgent = "plan" | "build";
+
 export interface OpencodeProjectStatus {
   id: string;
   worktree: string;
@@ -27,7 +29,9 @@ export interface OpencodeSessionStatus {
   title: string;
   directory: string;
   processing: boolean;
-  processingStatus?: "idle" | "busy" | "retry";
+  processingStatus?: "idle" | "busy" | "retry" | null;
+  issueKey?: string | null;
+  agent?: OpencodeAgent | null;
   model?: {
     id: string;
     providerID: string;
@@ -68,10 +72,28 @@ export type PeerMessage =
   | { id: string; type: "opencode.status_response"; status: OpencodeStatus }
   | {
       id: string;
+      type: "opencode.session.create";
+      projectId: string;
+      worktree: string;
+      sandboxName: string;
+      prompt: string;
+      agent: OpencodeAgent;
+      issueKey?: string;
+    }
+  | {
+      id: string;
+      type: "opencode.session.create_response";
+      accepted: boolean;
+      sessionId?: string;
+      error?: string;
+    }
+  | {
+      id: string;
       type: "opencode.session.prompt";
       sessionId: string;
       prompt: string;
       delivery?: "immediate" | "deferred";
+      agent?: OpencodeAgent;
     }
   | {
       id: string;

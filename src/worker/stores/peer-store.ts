@@ -1,9 +1,11 @@
 import debug from "debug";
 import type { PeerClient } from "src/peer-client";
+import { handleOpencodeSessionCreate } from "src/peer-handlers/handle-opencode-session-create";
 import { handleOpencodeSessionPrompt } from "src/peer-handlers/handle-opencode-session-prompt";
 import { handleOpencodeStatus } from "src/peer-handlers/handle-opencode-status";
 import { handleWorktreeList } from "src/peer-handlers/handle-worktree-list";
 import type { ExecutionContext } from "src/worker/context";
+import { parseUltrafeedEventData } from "src/worker/events";
 import type {
   EventCursor,
   StoreSnapshot,
@@ -17,6 +19,8 @@ const log = debug("app:peer");
 type PeerStoreState = {
   activePeerId: string | null;
   pendingPeerId: string | null;
+  sessionIssueKeys: Record<string, string>;
+  sessionAgents: Record<string, "plan" | "build">;
 };
 
 export function createPeerStore(
@@ -26,13 +30,31 @@ export function createPeerStore(
   const state: PeerStoreState = {
     activePeerId: null,
     pendingPeerId: null,
+    sessionIssueKeys: {},
+    sessionAgents: {},
+  };
+
+  const sessionMetadata = {
+    issueKeys: state.sessionIssueKeys,
+    agents: state.sessionAgents,
+  };
+  const sessionMetadataStore = {
+    setIssueKey: (sessionId: string, issueKey: string) => {
+      state.sessionIssueKeys[sessionId] = issueKey;
+    },
+    setAgent: (sessionId: string, agent: "plan" | "build") => {
+      state.sessionAgents[sessionId] = agent;
+    },
   };
 
   client.register("worktree.list", (message) => {
     handleWorktreeList(message, client.send);
   });
   client.register("opencode.status", (message) => {
-    handleOpencodeStatus(message, client.send);
+    handleOpencodeStatus(message, client.send, sessionMetadata);
+  });
+  client.register("opencode.session.create", (message) => {
+    handleOpencodeSessionCreate(message, client.send, sessionMetadataStore);
   });
   client.register("opencode.session.prompt", (message) => {
     handleOpencodeSessionPrompt(message, client.send);
@@ -51,6 +73,17 @@ export function createPeerStore(
       if (browserPeerReadyEvent) {
         state.pendingPeerId = browserPeerReadyEvent.data.peerId;
         return true;
+      }
+      if (event.event_type === "validate_issue_started") {
+        const parsed = parseUltrafeedEventData(
+          event.event_type,
+          event.data,
+        ) as { session_id: string; issue_key: string } | null;
+
+        if (parsed) {
+          state.sessionIssueKeys[parsed.session_id] = parsed.issue_key;
+          return true;
+        }
       }
       return false;
     },

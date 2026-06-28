@@ -19,6 +19,8 @@ const zValidationSessionContext = z.object({
   worktree_name: z.string().min(1),
   worktree_branch: z.string().min(1),
   worktree_directory: z.string().min(1),
+  opencode_project_id: z.string().min(1).optional(),
+  opencode_sandbox_name: z.string().min(1).optional(),
 });
 
 const zValidationQuestion = z.object({

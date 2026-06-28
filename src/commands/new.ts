@@ -33,6 +33,8 @@ type ValidationIdentifiers = {
   worktreeName: string;
   worktreeBranch: string;
   worktreeDirectory: string;
+  opencodeProjectId?: string;
+  opencodeSandboxName?: string;
 };
 
 type ValidationEventIdentifiers = {
@@ -44,6 +46,8 @@ type ValidationEventIdentifiers = {
   worktree_name: string;
   worktree_branch: string;
   worktree_directory: string;
+  opencode_project_id?: string;
+  opencode_sandbox_name?: string;
 };
 
 type ModelConfig = {
@@ -177,6 +181,8 @@ export async function runIssueValidation(input: {
       worktreeName: worktree.name,
       worktreeBranch: worktree.branch,
       worktreeDirectory: worktree.directory,
+      opencodeProjectId: session.projectID,
+      opencodeSandboxName: worktree.name,
     });
 
     await input.hooks?.onStarted?.({
@@ -508,6 +514,8 @@ function toValidationEventIdentifiers(
     worktree_name: input.worktreeName,
     worktree_branch: input.worktreeBranch,
     worktree_directory: input.worktreeDirectory,
+    opencode_project_id: input.opencodeProjectId,
+    opencode_sandbox_name: input.opencodeSandboxName,
   };
 }
 
