@@ -6,7 +6,6 @@ import {
   readStoreSnapshot,
   writeStateSnapshotBundle,
 } from "./persistence";
-import type { FeedEvent } from "./types";
 import type { EventCursor, WorkerStore } from "./stores/types";
 
 export async function hydrateStores(stores: Array<WorkerStore<any>>) {

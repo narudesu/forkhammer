@@ -1,17 +1,20 @@
 import { RealtimeEventBuffer } from "src/worker/realtime/event-buffer";
 import { REALTIME_CHANNEL_NAME } from "../constants";
 import type { ExecutionContext } from "../context";
-import { processEvent, reconcileStores } from "../event-processor";
+import {
+  processEvent,
+  ProcessEventStores,
+  reconcileStores,
+} from "../event-processor";
 import {
   hydrateStores,
   loadBackfillEvents,
   persistDueSnapshots,
 } from "../state-manager";
-import type { WorkerStore } from "../stores/types";
 import type { ProcessResult, RealtimeChannelLike } from "../types";
 
 export interface RealtimeSubscriptionOptions {
-  createStores: (ctx: ExecutionContext) => Array<WorkerStore<unknown>>;
+  createStores: (ctx: ExecutionContext) => ProcessEventStores;
 }
 
 export async function runRealtimeSubscription(
@@ -67,7 +70,7 @@ export async function runRealtimeSubscription(
       processingStarted = true;
 
       try {
-        cursor.current = await hydrateStores(stores);
+        cursor.current = await hydrateStores(stores.workerStores);
         const snapshotEvents = await loadBackfillEvents(ctx, cursor.current);
         ctx.log.debug("loaded %d backfill events", snapshotEvents.length);
 
@@ -83,7 +86,7 @@ export async function runRealtimeSubscription(
           await processEvent(ctx, event, stores, seenEventIds, cursor, {
             reconcile: false,
           });
-          await persistDueSnapshots(stores, cursor.current);
+          await persistDueSnapshots(stores.workerStores, cursor.current);
         }
 
         let bufferedEvents = buffer.drain();
@@ -111,8 +114,8 @@ export async function runRealtimeSubscription(
         }
 
         ctx.log.debug("projection caught up; reconciling stores");
-        await reconcileStores(ctx, stores);
-        await persistDueSnapshots(stores, cursor.current);
+        await reconcileStores(ctx, stores.workerStores);
+        await persistDueSnapshots(stores.workerStores, cursor.current);
 
         while (!stopped) {
           const event = await buffer.next();
@@ -123,7 +126,7 @@ export async function runRealtimeSubscription(
           await processEvent(ctx, event, stores, seenEventIds, cursor, {
             reconcile: true,
           });
-          await persistDueSnapshots(stores, cursor.current);
+          await persistDueSnapshots(stores.workerStores, cursor.current);
         }
       } catch (error) {
         ctx.log.debug("realtime pipeline error %o", error);

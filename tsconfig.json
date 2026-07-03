@@ -9,9 +9,8 @@
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "types": ["node"],
-    "baseUrl": ".",
     "paths": {
-      "src/*": ["src/*"]
+      "src/*": ["./src/*"]
     }
   },
   "include": ["src/**/*.ts", "website/**/*.ts", "website/**/*.tsx"]

@@ -1,3 +1,4 @@
+import { ExecutionContext } from "src/worker/context";
 import type { FeedEvent } from "../types";
 
 export type EventCursor = {
@@ -16,6 +17,11 @@ export type StoreSnapshotBundle = {
   cursor: EventCursor | null;
   stores: Record<string, StoreSnapshot>;
 };
+
+export interface ReconcilableStore {
+  name: string;
+  reconcile: () => Promise<boolean>;
+}
 
 export type WorkerStore<TState = unknown> = {
   name: string;

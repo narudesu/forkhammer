@@ -1,11 +1,19 @@
+import { createEvent } from "effector";
 import type { ExecutionContext } from "./context";
+import type { ReconcilableStore, WorkerStore } from "./stores/types";
 import type { FeedEvent, ProcessResult } from "./types";
-import type { WorkerStore } from "./stores/types";
+
+export const feedEventReceived = createEvent<FeedEvent>();
+
+export interface ProcessEventStores {
+  workerStores: WorkerStore<any>[];
+  extraReconcilables: ReconcilableStore[];
+}
 
 export async function processEvent(
   ctx: ExecutionContext,
   event: FeedEvent,
-  stores: Array<WorkerStore<any>>,
+  stores: ProcessEventStores,
   seenEventIds: Set<string>,
   cursor: { current: { created_at: string; id: string } | null },
   options: { reconcile?: boolean } = {},
@@ -22,14 +30,21 @@ export async function processEvent(
   seenEventIds.add(event.id);
   ctx.log.debug("reducing event %s (%s)", event.id, event.event_type);
 
-  for (const store of stores) {
+  // tell each classic store
+  for (const store of stores.workerStores) {
     store.reduce(event, cursor.current);
   }
+
+  // tell effector logic about the event
+  feedEventReceived(event);
 
   cursor.current = { created_at: event.created_at, id: event.id };
 
   if (options.reconcile) {
-    await reconcileStores(ctx, stores);
+    await reconcileStores(ctx, [
+      ...stores.workerStores,
+      ...stores.extraReconcilables,
+    ]);
   }
 
   return { unauthorized: false, processed: true };
@@ -37,7 +52,7 @@ export async function processEvent(
 
 export async function reconcileStores(
   ctx: ExecutionContext,
-  stores: Array<WorkerStore<any>>,
+  stores: Array<ReconcilableStore>,
 ) {
   await Promise.all(
     stores.map(async (store) => {

@@ -91,6 +91,11 @@ export const browserPeerReadyEventSchema = z.object({
   peerId: z.string().min(1),
 });
 
+const zInsertedArtifactData = z.object({
+  artifactType: z.string().nullish(),
+  artifactId: z.string(),
+});
+
 export type BrowserPeerReadyEvent = z.infer<typeof browserPeerReadyEventSchema>;
 
 export const ultrafeedEventDefinitions = [
@@ -157,6 +162,7 @@ export const ultrafeedEventSchemas = {
   issue_validation_failed: zIssueValidationFailedData,
   browser_peer_ready: zBrowserPeerReadyData,
   artifact_refresh_requested: zArtifactRefreshRequestedData,
+  inserted_artifact: zInsertedArtifactData,
 } as const;
 
 export const ultrafeedRequestEventTypes = [
