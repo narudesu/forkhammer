@@ -1,12 +1,12 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import {
   createEvent,
   type EventCallable,
   type Scope,
-  type StoreWritable,
   scopeBind,
+  type StoreWritable,
 } from "effector";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { type EventCursor, getEarliestCursor } from "src/worker/stores/types";
 
 interface EffectorStoreSnapshotFile {

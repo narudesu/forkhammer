@@ -1,4 +1,4 @@
-import { allSettled, createEffect, scopeBind, type Scope } from "effector";
+import { createEffect, scopeBind, type Scope } from "effector";
 import type { WorkerContext } from "src/worker/context/types";
 import { reconcileRequested } from "src/worker/events/store-events";
 import type { UltrafeedEvent } from "src/worker/feed/feed-events";
@@ -36,7 +36,7 @@ export const effectSubscribed = createEffect(
     };
 
     const reconcileStores = async () => {
-      await allSettled(reconcileRequested, { scope, params: { ctx } });
+      scopeBind(reconcileRequested, { scope })({ ctx });
     };
 
     // load events since the oldest cursor
