@@ -5,7 +5,7 @@ opencode serve --hostname "0.0.0.0" --port "8000" &
 OPENCODE_PID=$!
 
 cd /app/forkhammer
-bun run /app/forkhammer/src/cli.ts start-worker &
+bun run /app/forkhammer/src/run-cli.ts start-worker &
 WORKER_PID=$!
 
 cleanup() {
