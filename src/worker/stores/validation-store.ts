@@ -1,16 +1,29 @@
 import chalk from "chalk";
+import {
+  createEffect,
+  createEvent,
+  createStore,
+  type Scope,
+  sample,
+  scopeBind,
+} from "effector";
+import { produce } from "immer";
 import type { WorkerContext } from "src/worker/context/types";
-import type { UltrafeedEvent } from "src/worker/feed/feed-events";
-import { getIssueKey } from "../domain";
-import type { UltrafeedEventData } from "../events";
-import { parseUltrafeedEventData } from "../events";
-import type { EventCursor, StoreSnapshot, WorkerStore } from "./types";
+import { getIssueKey } from "src/worker/domain";
+import type { UltrafeedEventData } from "src/worker/events";
+import { parseUltrafeedEventData } from "src/worker/events";
+import { reconcileRequested } from "src/worker/events/store-events";
+import { feedEventReceived } from "src/worker/jira-artifact/jira-artifact-events";
+import { HydratableStore } from "src/worker/snapshot/effector-snapshots";
+import {
+  type EventCursor,
+  isAfterCurrentCursor,
+} from "src/worker/stores/types";
 
 type IssueState = {
   requestEventId: string | null;
   started: boolean;
   completed: boolean;
-  dispatchedRequestEventId: string | null;
   lastError: string | null;
   promptRequests: Record<string, PromptRequestState>;
   lastPromptRequestEventId: string | null;
@@ -28,11 +41,35 @@ type PromptRequestState = {
   worktreeName: string;
   worktreeBranch: string;
   worktreeDirectory: string;
-  dispatched: boolean;
 };
 
-type ValidationStoreState = {
+export type ValidationStoreState = {
   issues: Record<string, IssueState>;
+  cursor: EventCursor | null;
+};
+
+type ValidationRuntimeStoreState = {
+  dispatchedValidationRequestIds: Record<string, true>;
+  dispatchedPromptRequestIds: Record<string, true>;
+  validationDispatchErrors: Record<string, string>;
+  promptDispatchErrors: Record<string, string>;
+};
+
+type ValidationDispatchRequest = {
+  ctx: WorkerContext;
+  issueKey: string;
+  requestEventId: string;
+};
+
+type PromptDispatchRequest = {
+  ctx: WorkerContext;
+  issueKey: string;
+  promptRequest: PromptRequestState;
+};
+
+type DispatchRequestBatch<T> = {
+  requests: T[];
+  scope?: Scope;
 };
 
 const VALIDATION_EVENT_TYPES = new Set([
@@ -45,236 +82,338 @@ const VALIDATION_EVENT_TYPES = new Set([
   "issue_validation_failed",
 ]);
 const storeLabel = chalk.cyan.bold("[validation]");
-const requestLabel = chalk.yellow.bold("request");
 const sideEffectLabel = chalk.magenta.bold("side effect");
 const successLabel = chalk.green.bold("success");
 const failureLabel = chalk.red.bold("failure");
 
-export function createValidationStore(
-  ctx: WorkerContext,
-): WorkerStore<ValidationStoreState> {
-  const state: ValidationStoreState = {
+export const $validationStore = createStore<ValidationStoreState>(
+  {
     issues: {},
-  };
+    cursor: null,
+  },
+  { sid: "validation" },
+);
 
-  let reducedEventsSinceSnapshot = 0;
-  let forceSnapshot = false;
+export const hydratableValidationStore =
+  HydratableStore.fromEffectorStore($validationStore);
 
-  return {
-    name: "validation",
-    reduce(event: UltrafeedEvent, cursor: EventCursor | null) {
-      if (!VALIDATION_EVENT_TYPES.has(event.event_type)) {
-        return false;
+const $validationRuntimeStore = createStore<ValidationRuntimeStoreState>({
+  dispatchedValidationRequestIds: {},
+  dispatchedPromptRequestIds: {},
+  validationDispatchErrors: {},
+  promptDispatchErrors: {},
+});
+
+const validationDispatchQueued = createEvent<ValidationDispatchRequest>();
+const promptDispatchQueued = createEvent<PromptDispatchRequest>();
+const validationDispatchFailed = createEvent<{
+  issueKey: string;
+  requestEventId: string;
+  error: unknown;
+}>();
+const promptDispatchFailed = createEvent<{
+  issueKey: string;
+  requestEventId: string;
+  error: unknown;
+}>();
+
+$validationStore.on(feedEventReceived, (state, event) =>
+  produce(state, (state) => {
+    if (!VALIDATION_EVENT_TYPES.has(event.event_type)) {
+      return;
+    }
+
+    if (!isAfterCurrentCursor(state.cursor, event)) {
+      return;
+    }
+
+    const issueKey = getIssueKey(event);
+    if (!issueKey) {
+      return;
+    }
+
+    const issue = getOrCreateIssue(state, issueKey);
+
+    if (event.event_type === "validate_issue_requested") {
+      issue.requestEventId = event.id;
+      issue.started = false;
+      issue.completed = false;
+      issue.lastError = null;
+      issue.promptRequests = {};
+      issue.lastPromptRequestEventId = null;
+      issue.lastPromptError = null;
+    } else if (event.event_type === "validate_issue_started") {
+      issue.started = true;
+    } else if (event.event_type === "validate_issue_prompt_requested") {
+      const parsed = parseUltrafeedEventData(
+        event.event_type,
+        event.data,
+      ) as UltrafeedEventData<"validate_issue_prompt_requested"> | null;
+      if (!parsed) {
+        return;
       }
 
-      if (!isAfterCurrentCursor(cursor, event)) {
-        return false;
-      }
-
-      const issueKey = getIssueKey(event);
-      if (!issueKey) {
-        return false;
-      }
-
-      const issue = getOrCreateIssue(state, issueKey);
-
-      if (event.event_type === "validate_issue_requested") {
-        ctx.log.debug(
-          `${storeLabel} ${requestLabel} received for ${chalk.green(issueKey)} (${chalk.white(event.id)})`,
-        );
-        issue.requestEventId = event.id;
-        issue.started = false;
-        issue.completed = false;
-        issue.dispatchedRequestEventId = null;
-        issue.lastError = null;
-        issue.promptRequests = {};
-        issue.lastPromptRequestEventId = null;
-        issue.lastPromptError = null;
-      } else if (event.event_type === "validate_issue_started") {
-        issue.started = true;
-        ctx.log.debug(
-          `${storeLabel} ${sideEffectLabel} started for ${chalk.green(issueKey)}`,
-        );
-      } else if (event.event_type === "validate_issue_prompt_requested") {
-        const parsed = parseUltrafeedEventData(
-          event.event_type,
-          event.data,
-        ) as UltrafeedEventData<"validate_issue_prompt_requested"> | null;
-        if (!parsed) {
-          return false;
-        }
-
-        issue.promptRequests[event.id] = {
-          requestEventId: event.id,
-          issueKey: parsed.issue_key,
-          prompt: parsed.prompt,
-          projectKey: parsed.project_key,
-          projectName: parsed.project_name,
-          projectId: parsed.project_id,
-          sessionId: parsed.session_id,
-          worktreeName: parsed.worktree_name,
-          worktreeBranch: parsed.worktree_branch,
-          worktreeDirectory: parsed.worktree_directory,
-          dispatched: false,
-        };
-        issue.lastPromptError = null;
-        ctx.log.debug(
-          `${storeLabel} ${requestLabel} prompt queued for ${chalk.green(issueKey)} (${chalk.white(event.id)})`,
-        );
-      } else if (event.event_type === "validate_issue_prompt_completed") {
-        const parsed = parseUltrafeedEventData(
-          event.event_type,
-          event.data,
-        ) as UltrafeedEventData<"validate_issue_prompt_completed"> | null;
-        if (!parsed) {
-          return false;
-        }
-
-        delete issue.promptRequests[parsed.request_event_id];
-        issue.lastPromptRequestEventId = parsed.request_event_id;
-        issue.lastPromptError = null;
-        ctx.log.debug(
-          `${storeLabel} ${successLabel} prompt completed for ${chalk.green(issueKey)} (${chalk.white(parsed.request_event_id)})`,
-        );
-      } else if (event.event_type === "validate_issue_prompt_failed") {
-        const parsed = parseUltrafeedEventData(
-          event.event_type,
-          event.data,
-        ) as UltrafeedEventData<"validate_issue_prompt_failed"> | null;
-        if (!parsed) {
-          return false;
-        }
-
-        delete issue.promptRequests[parsed.request_event_id];
-        issue.lastPromptRequestEventId = parsed.request_event_id;
-        issue.lastPromptError = parsed.error;
-        ctx.log.debug(
-          `${storeLabel} ${failureLabel} prompt for ${chalk.green(issueKey)} (${chalk.white(parsed.request_event_id)}): ${chalk.red(parsed.error)}`,
-        );
-      } else if (event.event_type === "issue_validated") {
-        issue.completed = true;
-        issue.lastError = null;
-        ctx.log.debug(
-          `${storeLabel} ${successLabel} completed for ${chalk.green(issueKey)}`,
-        );
-      } else if (event.event_type === "issue_validation_failed") {
-        issue.completed = false;
-        const parsed = parseUltrafeedEventData(
-          event.event_type,
-          event.data,
-        ) as UltrafeedEventData<"issue_validation_failed"> | null;
-        const error = parsed?.error;
-        issue.lastError = typeof error === "string" ? error : null;
-        ctx.log.debug(
-          `${storeLabel} ${failureLabel} for ${chalk.green(issueKey)}: ${chalk.red(issue.lastError ?? "unknown error")}`,
-        );
-      }
-
-      reducedEventsSinceSnapshot += 1;
-      return true;
-    },
-    async reconcile() {
-      let mutated = false;
-
-      for (const [issueKey, issue] of Object.entries(state.issues)) {
-        for (const promptRequest of Object.values(issue.promptRequests)) {
-          if (promptRequest.dispatched) {
-            continue;
-          }
-
-          promptRequest.dispatched = true;
-          mutated = true;
-
-          void (async () => {
-            try {
-              ctx.log.debug(
-                `${storeLabel} ${sideEffectLabel} dispatching prompt for ${chalk.green(issueKey)} (${chalk.white(promptRequest.requestEventId)})`,
-              );
-              await ctx.validation.runIssuePrompt({
-                issueKey,
-                requestEventId: promptRequest.requestEventId,
-                prompt: promptRequest.prompt,
-                projectKey: promptRequest.projectKey,
-                projectName: promptRequest.projectName,
-                projectId: promptRequest.projectId,
-                sessionId: promptRequest.sessionId,
-                worktreeName: promptRequest.worktreeName,
-                worktreeBranch: promptRequest.worktreeBranch,
-                worktreeDirectory: promptRequest.worktreeDirectory,
-              });
-              ctx.log.debug(
-                `${storeLabel} ${successLabel} dispatched prompt for ${chalk.green(issueKey)} (${chalk.white(promptRequest.requestEventId)})`,
-              );
-            } catch (error) {
-              issue.lastPromptError =
-                error instanceof Error ? error.message : String(error);
-              ctx.log.error(
-                `${storeLabel} ${failureLabel} prompt for ${chalk.green(issueKey)} (${chalk.white(promptRequest.requestEventId)}): ${chalk.red(issue.lastPromptError)}`,
-              );
-            }
-          })();
-        }
-
-        if (!issue.requestEventId || issue.started || issue.completed) {
-          continue;
-        }
-
-        if (issue.dispatchedRequestEventId === issue.requestEventId) {
-          continue;
-        }
-
-        issue.dispatchedRequestEventId = issue.requestEventId;
-        mutated = true;
-
-        void (async () => {
-          try {
-            ctx.log.debug(
-              `${storeLabel} ${sideEffectLabel} dispatching validation for ${chalk.green(issueKey)}`,
-            );
-            await ctx.validation.runIssueValidation({ key: issueKey });
-            ctx.log.debug(
-              `${storeLabel} ${successLabel} dispatched validation for ${chalk.green(issueKey)}`,
-            );
-          } catch (error) {
-            issue.lastError =
-              error instanceof Error ? error.message : String(error);
-            ctx.log.error(
-              `${storeLabel} ${failureLabel} validation for ${chalk.green(issueKey)}: ${chalk.red(issue.lastError)}`,
-            );
-          }
-        })();
-      }
-
-      if (mutated) {
-        forceSnapshot = true;
-      }
-
-      return mutated;
-    },
-    hydrate(snapshot: StoreSnapshot<ValidationStoreState> | null) {
-      state.issues = Object.fromEntries(
-        Object.entries(snapshot?.state.issues ?? {}).map(
-          ([issueKey, issue]) => [issueKey, normalizeIssueState(issue)],
-        ),
-      );
-      reducedEventsSinceSnapshot = snapshot?.reducedEventsSinceSnapshot ?? 0;
-      forceSnapshot = false;
-    },
-    snapshot() {
-      return {
-        version: 1 as const,
-        reducedEventsSinceSnapshot,
-        state,
+      issue.promptRequests[event.id] = {
+        requestEventId: event.id,
+        issueKey: parsed.issue_key,
+        prompt: parsed.prompt,
+        projectKey: parsed.project_key,
+        projectName: parsed.project_name,
+        projectId: parsed.project_id,
+        sessionId: parsed.session_id,
+        worktreeName: parsed.worktree_name,
+        worktreeBranch: parsed.worktree_branch,
+        worktreeDirectory: parsed.worktree_directory,
       };
-    },
-    needsSnapshot() {
-      return forceSnapshot || reducedEventsSinceSnapshot >= 10;
-    },
-    markSnapshotPersisted() {
-      reducedEventsSinceSnapshot = 0;
-      forceSnapshot = false;
-    },
-  };
+      issue.lastPromptError = null;
+    } else if (event.event_type === "validate_issue_prompt_completed") {
+      const parsed = parseUltrafeedEventData(
+        event.event_type,
+        event.data,
+      ) as UltrafeedEventData<"validate_issue_prompt_completed"> | null;
+      if (!parsed) {
+        return;
+      }
+
+      delete issue.promptRequests[parsed.request_event_id];
+      issue.lastPromptRequestEventId = parsed.request_event_id;
+      issue.lastPromptError = null;
+    } else if (event.event_type === "validate_issue_prompt_failed") {
+      const parsed = parseUltrafeedEventData(
+        event.event_type,
+        event.data,
+      ) as UltrafeedEventData<"validate_issue_prompt_failed"> | null;
+      if (!parsed) {
+        return;
+      }
+
+      delete issue.promptRequests[parsed.request_event_id];
+      issue.lastPromptRequestEventId = parsed.request_event_id;
+      issue.lastPromptError = parsed.error;
+    } else if (event.event_type === "issue_validated") {
+      issue.completed = true;
+      issue.lastError = null;
+    } else if (event.event_type === "issue_validation_failed") {
+      issue.completed = false;
+      const parsed = parseUltrafeedEventData(
+        event.event_type,
+        event.data,
+      ) as UltrafeedEventData<"issue_validation_failed"> | null;
+      const error = parsed?.error;
+      issue.lastError = typeof error === "string" ? error : null;
+    }
+
+    state.cursor = { id: event.id, created_at: event.created_at };
+  }),
+);
+
+$validationRuntimeStore.on(validationDispatchQueued, (state, action) =>
+  produce(state, (state) => {
+    state.dispatchedValidationRequestIds[action.requestEventId] = true;
+    delete state.validationDispatchErrors[action.requestEventId];
+  }),
+);
+
+$validationRuntimeStore.on(promptDispatchQueued, (state, action) =>
+  produce(state, (state) => {
+    state.dispatchedPromptRequestIds[action.promptRequest.requestEventId] =
+      true;
+    delete state.promptDispatchErrors[action.promptRequest.requestEventId];
+  }),
+);
+
+$validationRuntimeStore.on(validationDispatchFailed, (state, action) =>
+  produce(state, (state) => {
+    state.validationDispatchErrors[action.requestEventId] = formatError(
+      action.error,
+    );
+  }),
+);
+
+$validationRuntimeStore.on(promptDispatchFailed, (state, action) =>
+  produce(state, (state) => {
+    state.promptDispatchErrors[action.requestEventId] = formatError(
+      action.error,
+    );
+  }),
+);
+
+const effectRunIssueValidation = createEffect(
+  async ({ ctx, issueKey }: ValidationDispatchRequest) => {
+    try {
+      ctx.log.debug(
+        `${storeLabel} ${sideEffectLabel} dispatching validation for ${chalk.green(issueKey)}`,
+      );
+      await ctx.validation.runIssueValidation({ key: issueKey });
+      ctx.log.debug(
+        `${storeLabel} ${successLabel} dispatched validation for ${chalk.green(issueKey)}`,
+      );
+    } catch (error) {
+      ctx.log.error(
+        `${storeLabel} ${failureLabel} validation for ${chalk.green(issueKey)}: ${chalk.red(formatError(error))}`,
+      );
+      throw error;
+    }
+  },
+);
+
+const effectRunIssuePrompt = createEffect(
+  async ({ ctx, issueKey, promptRequest }: PromptDispatchRequest) => {
+    try {
+      ctx.log.debug(
+        `${storeLabel} ${sideEffectLabel} dispatching prompt for ${chalk.green(issueKey)} (${chalk.white(promptRequest.requestEventId)})`,
+      );
+      await ctx.validation.runIssuePrompt({
+        issueKey,
+        requestEventId: promptRequest.requestEventId,
+        prompt: promptRequest.prompt,
+        projectKey: promptRequest.projectKey,
+        projectName: promptRequest.projectName,
+        projectId: promptRequest.projectId,
+        sessionId: promptRequest.sessionId,
+        worktreeName: promptRequest.worktreeName,
+        worktreeBranch: promptRequest.worktreeBranch,
+        worktreeDirectory: promptRequest.worktreeDirectory,
+      });
+      ctx.log.debug(
+        `${storeLabel} ${successLabel} dispatched prompt for ${chalk.green(issueKey)} (${chalk.white(promptRequest.requestEventId)})`,
+      );
+    } catch (error) {
+      ctx.log.error(
+        `${storeLabel} ${failureLabel} prompt for ${chalk.green(issueKey)} (${chalk.white(promptRequest.requestEventId)}): ${chalk.red(formatError(error))}`,
+      );
+      throw error;
+    }
+  },
+);
+
+const effectQueueValidationDispatches = createEffect(
+  async ({
+    requests,
+    scope,
+  }: DispatchRequestBatch<ValidationDispatchRequest>) => {
+    const queueDispatch = scope
+      ? scopeBind(validationDispatchQueued, { scope })
+      : validationDispatchQueued;
+
+    for (const request of requests) {
+      queueDispatch(request);
+    }
+  },
+);
+
+const effectQueuePromptDispatches = createEffect(
+  async ({ requests, scope }: DispatchRequestBatch<PromptDispatchRequest>) => {
+    const queueDispatch = scope
+      ? scopeBind(promptDispatchQueued, { scope })
+      : promptDispatchQueued;
+
+    for (const request of requests) {
+      queueDispatch(request);
+    }
+  },
+);
+
+sample({
+  clock: reconcileRequested,
+  source: {
+    validation: $validationStore,
+    runtime: $validationRuntimeStore,
+  },
+  fn: (state, { ctx, scope }) => ({
+    requests: findValidationDispatchRequests(
+      state.validation,
+      state.runtime,
+      ctx,
+    ),
+    scope,
+  }),
+  target: effectQueueValidationDispatches,
+});
+
+sample({
+  clock: reconcileRequested,
+  source: {
+    validation: $validationStore,
+    runtime: $validationRuntimeStore,
+  },
+  fn: (state, { ctx, scope }) => ({
+    requests: findPromptDispatchRequests(state.validation, state.runtime, ctx),
+    scope,
+  }),
+  target: effectQueuePromptDispatches,
+});
+
+sample({
+  clock: validationDispatchQueued,
+  target: effectRunIssueValidation,
+});
+
+sample({
+  clock: promptDispatchQueued,
+  target: effectRunIssuePrompt,
+});
+
+sample({
+  clock: effectRunIssueValidation.fail,
+  fn: ({ params, error }) => ({
+    issueKey: params.issueKey,
+    requestEventId: params.requestEventId,
+    error,
+  }),
+  target: validationDispatchFailed,
+});
+
+sample({
+  clock: effectRunIssuePrompt.fail,
+  fn: ({ params, error }) => ({
+    issueKey: params.issueKey,
+    requestEventId: params.promptRequest.requestEventId,
+    error,
+  }),
+  target: promptDispatchFailed,
+});
+
+function findValidationDispatchRequests(
+  validation: ValidationStoreState,
+  runtime: ValidationRuntimeStoreState,
+  ctx: WorkerContext,
+): ValidationDispatchRequest[] {
+  const requests: ValidationDispatchRequest[] = [];
+
+  for (const [issueKey, issue] of Object.entries(validation.issues)) {
+    if (!issue.requestEventId || issue.started || issue.completed) {
+      continue;
+    }
+
+    if (runtime.dispatchedValidationRequestIds[issue.requestEventId]) {
+      continue;
+    }
+
+    requests.push({ ctx, issueKey, requestEventId: issue.requestEventId });
+  }
+
+  return requests;
+}
+
+function findPromptDispatchRequests(
+  validation: ValidationStoreState,
+  runtime: ValidationRuntimeStoreState,
+  ctx: WorkerContext,
+): PromptDispatchRequest[] {
+  const requests: PromptDispatchRequest[] = [];
+
+  for (const [issueKey, issue] of Object.entries(validation.issues)) {
+    for (const promptRequest of Object.values(issue.promptRequests)) {
+      if (runtime.dispatchedPromptRequestIds[promptRequest.requestEventId]) {
+        continue;
+      }
+
+      requests.push({ ctx, issueKey, promptRequest });
+    }
+  }
+
+  return requests;
 }
 
 function getOrCreateIssue(
@@ -290,7 +429,6 @@ function getOrCreateIssue(
     requestEventId: null,
     started: false,
     completed: false,
-    dispatchedRequestEventId: null,
     lastError: null,
     promptRequests: {},
     lastPromptRequestEventId: null,
@@ -304,7 +442,6 @@ function normalizeIssueState(issue: Partial<IssueState>): IssueState {
   issue.requestEventId ??= null;
   issue.started ??= false;
   issue.completed ??= false;
-  issue.dispatchedRequestEventId ??= null;
   issue.lastError ??= null;
   issue.promptRequests ??= {};
   issue.lastPromptRequestEventId ??= null;
@@ -313,17 +450,6 @@ function normalizeIssueState(issue: Partial<IssueState>): IssueState {
   return issue as IssueState;
 }
 
-function isAfterCurrentCursor(
-  cursor: EventCursor | null,
-  event: UltrafeedEvent,
-) {
-  if (!cursor) {
-    return true;
-  }
-
-  if (event.created_at !== cursor.created_at) {
-    return event.created_at > cursor.created_at;
-  }
-
-  return event.id > cursor.id;
+function formatError(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
