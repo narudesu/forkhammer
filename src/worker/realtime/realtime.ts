@@ -1,6 +1,7 @@
 import { createEffect, createEvent, fork, sample, scopeBind } from "effector";
 import { onceEvent } from "src/effector/simple";
 import type { WorkerContext } from "src/worker/context/types";
+import { feedEventReceived } from "src/worker/event-processor";
 import type { UltrafeedEvent } from "src/worker/feed/feed-events";
 import { RealtimeEventBuffer } from "src/worker/realtime/event-buffer";
 import { FeedChannel } from "src/worker/realtime/feed-channel";
@@ -26,7 +27,7 @@ export async function runRealtimeSubscriptionRound(
       scopeBind(unsubscribedChannel, { scope })();
     },
     onSubscribed: () => {
-      scopeBind(subscribed, { scope })({ buffer });
+      scopeBind(subscribed, { scope })({ buffer, ctx });
     },
   });
 
@@ -35,13 +36,25 @@ export async function runRealtimeSubscriptionRound(
 }
 
 interface SubscribedEventData {
+  ctx: WorkerContext;
   buffer: RealtimeEventBuffer;
 }
 
 const effectSubscribed = createEffect(
-  async ({ buffer }: SubscribedEventData) => {
+  async ({ buffer, ctx }: SubscribedEventData) => {
+    const readResult = await ctx.writer.read({
+      since: new Date(0).toISOString(),
+    });
+    console.log("read result", readResult);
+    for (const event of readResult) {
+      // handle each event received
+      feedEventReceived(event);
+    }
+    console.log("waiting for event");
     let event: UltrafeedEvent | null = await buffer.next();
     while (event) {
+      console.log("event", event);
+      console.log("waiting for event");
       event = await buffer.next();
     }
   },

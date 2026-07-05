@@ -1,11 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { SupabaseAuthToken } from "src/worker/auth-token";
 import type { WorkerConfig } from "src/worker/config";
+import { ResolvablePromise } from "src/worker/resolvable-promise";
 import { parseLoginResponse } from "./domain";
 
 export abstract class SupabaseAuth {
   abstract login(): Promise<void>;
   abstract activeTokenOrFail(): SupabaseAuthToken;
+  abstract onceActiveToken(): Promise<SupabaseAuthToken>;
 
   static create = createSupabaseAuth;
 }
@@ -20,11 +22,22 @@ export function createSupabaseAuth(opts: CreateSupabaseAuthOpts): SupabaseAuth {
   const supabase = opts.supabase;
   const authConfig = opts.config.supabase.auth;
 
-  const state: { activeToken: SupabaseAuthToken | null } = {
+  const state: {
+    activeToken: SupabaseAuthToken | null;
+    activeTokenPromise: ResolvablePromise<SupabaseAuthToken> | null;
+  } = {
     activeToken: null,
+    activeTokenPromise: null,
   };
 
   return {
+    async onceActiveToken() {
+      if (state.activeToken) {
+        return state.activeToken;
+      }
+      state.activeTokenPromise = ResolvablePromise.create();
+      return await state.activeTokenPromise.promise;
+    },
     activeTokenOrFail() {
       if (!state.activeToken) {
         throw new Error("not-logged-in");
@@ -62,6 +75,10 @@ export function createSupabaseAuth(opts: CreateSupabaseAuthOpts): SupabaseAuth {
       supabase.realtime.setAuth(parsed.token);
 
       state.activeToken = SupabaseAuthToken.fromString(parsed.token);
+      if (state.activeTokenPromise) {
+        state.activeTokenPromise.resolve(state.activeToken);
+        state.activeTokenPromise = null;
+      }
     },
   };
 }

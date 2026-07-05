@@ -18,11 +18,13 @@ export const $jiraArtifactRequests = createStore<JiraArtifactStoreState>({
 $jiraArtifactRequests
   .on(inboxRefetchRequested, (state) =>
     produce(state, (state) => {
+      console.log("refetch requested");
       state.isRefetchRequested = true;
     }),
   )
   .on(artifactInserted, (state) =>
     produce(state, (state) => {
+      console.log("artifact inserted");
       state.isRefetchRequested = false;
     }),
   );

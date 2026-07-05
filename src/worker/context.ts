@@ -6,6 +6,7 @@ import type { WorkerContext } from "src/worker/context/types";
 import type { ProcessEventStores } from "src/worker/event-processor";
 import { UltrafeedWriter } from "src/worker/ultrafeed-writer";
 import { runIssuePrompt, runIssueValidation } from "../commands/new";
+import { ResolvablePromise } from "src/worker/resolvable-promise";
 
 export function createWorkerContext(
   workerConfig: WorkerConfig,
@@ -14,6 +15,8 @@ export function createWorkerContext(
   },
 ): WorkerContext {
   const debug = createDebug("app:supabase-worker");
+
+  const authPromise = ResolvablePromise.create<SupabaseAuth>();
 
   const supabase = createClient(
     workerConfig.supabase.url,
@@ -24,7 +27,10 @@ export function createWorkerContext(
         detectSessionInUrl: false,
         persistSession: false,
       },
-      accessToken: async () => auth.activeTokenOrFail().getToken(),
+      accessToken: async () =>
+        authPromise.promise
+          .then((auth) => auth.onceActiveToken())
+          .then((token) => token.getToken()),
     },
   );
 
@@ -37,6 +43,7 @@ export function createWorkerContext(
     config: workerConfig,
     supabase,
   });
+  authPromise.resolve(auth);
 
   const ctx: WorkerContext = {
     stores: { workerStores: [], extraReconcilables: [] },
