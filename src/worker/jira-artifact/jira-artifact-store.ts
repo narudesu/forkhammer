@@ -3,7 +3,7 @@ import { produce } from "immer";
 import { reconcileRequested } from "src/worker/events/store-events";
 import { effectFetchArtifact } from "src/worker/jira-artifact/effect-fetch-artifact";
 import { feedEventReceived } from "src/worker/jira-artifact/jira-artifact-events";
-import { HydratableStore } from "src/worker/stores/effector-snapshots";
+import { HydratableStore } from "src/worker/snapshot/effector-snapshots";
 import {
   isAfterCurrentCursor,
   type EventCursor,

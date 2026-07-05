@@ -8,7 +8,7 @@ import { ResolvablePromise } from "src/worker/resolvable-promise";
 import {
   EffectorSnapshotRepository,
   type UnknownHydratableStore,
-} from "src/worker/stores/effector-snapshots";
+} from "src/worker/snapshot/effector-snapshots";
 import { UltrafeedWriter } from "src/worker/ultrafeed-writer";
 import { runIssuePrompt, runIssueValidation } from "../commands/new";
 

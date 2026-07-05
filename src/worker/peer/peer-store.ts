@@ -17,7 +17,7 @@ import type { WorkerContext } from "src/worker/context/types";
 import { reconcileRequested } from "src/worker/events/store-events";
 import { parseUltrafeedEventData } from "src/worker/events";
 import { feedEventReceived } from "src/worker/jira-artifact/jira-artifact-events";
-import { HydratableStore } from "src/worker/stores/effector-snapshots";
+import { HydratableStore } from "src/worker/snapshot/effector-snapshots";
 import type { EventCursor } from "src/worker/stores/types";
 import { isAfterCurrentCursor } from "src/worker/stores/types";
 import z from "zod";

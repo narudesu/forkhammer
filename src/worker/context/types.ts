@@ -5,7 +5,7 @@ import type { WorkerConfig } from "src/worker/config";
 import type {
   EffectorSnapshotRepository,
   UnknownHydratableStore,
-} from "src/worker/stores/effector-snapshots";
+} from "src/worker/snapshot/effector-snapshots";
 import type { UltrafeedWriter } from "src/worker/ultrafeed-writer";
 
 export interface WorkerContext {
