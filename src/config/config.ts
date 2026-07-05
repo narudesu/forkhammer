@@ -34,21 +34,14 @@ const zConfig = z.object({
   project: z.record(z.string(), zProjectConfig).optional(),
   supabase: z
     .object({
-      url: z.string(),
-      anon_key: z.string(),
-      table: z.string().optional(),
-      auth: z.discriminatedUnion("type", [
-        z.object({
-          type: z.literal("password"),
-          email: z.string().email(),
-          password: z.string().min(1),
-        }),
-        z.object({
-          type: z.literal("secret_string"),
-          secret_string: z.string().min(1),
-          function_url: z.string().url(),
-        }),
-      ]),
+      url: z.url(),
+      anon_key: z.string().min(1),
+      table: z.string().min(1),
+      auth: z.object({
+        type: z.literal("secret_string"),
+        secret_string: z.string().min(1),
+        function_url: z.url(),
+      }),
     })
     .optional(),
 });

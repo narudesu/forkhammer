@@ -1,5 +1,4 @@
-import { ExecutionContext } from "src/worker/context";
-import type { FeedEvent } from "../types";
+import type { UltrafeedEvent } from "src/worker/feed/feed-events";
 
 export type EventCursor = {
   created_at: string;
@@ -25,7 +24,7 @@ export interface ReconcilableStore {
 
 export type WorkerStore<TState = unknown> = {
   name: string;
-  reduce: (event: FeedEvent, cursor: EventCursor | null) => boolean;
+  reduce: (event: UltrafeedEvent, cursor: EventCursor | null) => boolean;
   reconcile: () => Promise<boolean>;
   hydrate: (snapshot: StoreSnapshot<TState> | null) => void;
   snapshot: () => StoreSnapshot<TState>;

@@ -1,8 +1,8 @@
 import { createEvent } from "effector";
-import type { ExecutionContext } from "src/worker/context";
+import type { WorkerContext } from "src/worker/context/types";
 
 export interface ReconcileRequestedEventData {
-  ctx: ExecutionContext;
+  ctx: WorkerContext;
 }
 
 export const reconcileRequested = createEvent<ReconcileRequestedEventData>();

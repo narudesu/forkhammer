@@ -1,9 +1,9 @@
 import chalk from "chalk";
-import type { ExecutionContext } from "../context";
+import type { WorkerContext } from "src/worker/context/types";
+import type { UltrafeedEvent } from "src/worker/feed/feed-events";
 import { getIssueKey } from "../domain";
-import { parseUltrafeedEventData } from "../events";
 import type { UltrafeedEventData } from "../events";
-import type { FeedEvent } from "../types";
+import { parseUltrafeedEventData } from "../events";
 import type { EventCursor, StoreSnapshot, WorkerStore } from "./types";
 
 type IssueState = {
@@ -51,7 +51,7 @@ const successLabel = chalk.green.bold("success");
 const failureLabel = chalk.red.bold("failure");
 
 export function createValidationStore(
-  ctx: ExecutionContext,
+  ctx: WorkerContext,
 ): WorkerStore<ValidationStoreState> {
   const state: ValidationStoreState = {
     issues: {},
@@ -62,7 +62,7 @@ export function createValidationStore(
 
   return {
     name: "validation",
-    reduce(event: FeedEvent, cursor: EventCursor | null) {
+    reduce(event: UltrafeedEvent, cursor: EventCursor | null) {
       if (!VALIDATION_EVENT_TYPES.has(event.event_type)) {
         return false;
       }
@@ -170,9 +170,9 @@ export function createValidationStore(
         );
       }
 
-        reducedEventsSinceSnapshot += 1;
-        return true;
-      },
+      reducedEventsSinceSnapshot += 1;
+      return true;
+    },
     async reconcile() {
       let mutated = false;
 
@@ -315,7 +315,7 @@ function normalizeIssueState(issue: Partial<IssueState>): IssueState {
 
 function isAfterCurrentCursor(
   cursor: EventCursor | null,
-  event: FeedEvent,
+  event: UltrafeedEvent,
 ) {
   if (!cursor) {
     return true;

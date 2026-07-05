@@ -1,5 +1,11 @@
-import { createDefaultOpencodeClient, unwrapOpencodeData } from "src/opencode";
-import type { OpencodeAgent, PeerMessage } from "src/peer-protocol";
+import {
+  createDefaultOpencodeClient,
+  unwrapOpencodeData,
+} from "src/opencode/opencode";
+import type {
+  OpencodeAgent,
+  PeerMessage,
+} from "src/peer-protocol/peer-protocol";
 
 export type OpencodeSessionMetadataStore = {
   setIssueKey: (sessionId: string, issueKey: string) => void;
@@ -18,7 +24,9 @@ export async function handleOpencodeSessionCreate(
   try {
     const client = createDefaultOpencodeClient();
     const projects = await client.project.list().then(unwrapOpencodeData);
-    const project = projects.find((candidate) => candidate.id === msg.projectId);
+    const project = projects.find(
+      (candidate) => candidate.id === msg.projectId,
+    );
 
     if (!project) {
       throw new Error(`opencode-project-not-found:${msg.projectId}`);
@@ -75,6 +83,9 @@ export async function handleOpencodeSessionCreate(
   }
 }
 
-function getSandboxName(projectId: string, sandbox: string): string | undefined {
+function getSandboxName(
+  projectId: string,
+  sandbox: string,
+): string | undefined {
   return sandbox.split(projectId)[1]?.replace(/^\//, "");
 }

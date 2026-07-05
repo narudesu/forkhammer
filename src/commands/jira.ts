@@ -1,7 +1,7 @@
 import chalk from "chalk";
-import type { Config } from "../config";
-import { loadConfig } from "../config";
-import { getJiraInboxIssues, type JiraInboxIssue } from "../jira";
+import type { Config } from "../config/config";
+import { loadConfig } from "../config/config";
+import { getJiraInboxIssues, type JiraInboxIssue } from "../jira/jira";
 
 type RunJiraInboxOptions = {
   loadConfig?: () => Promise<Config>;
@@ -26,7 +26,7 @@ export async function runJiraInbox(options: RunJiraInboxOptions = {}) {
     return;
   }
 
-  const issues = await getJiraInboxIssues(jiraConfig, options.fetchFn ?? fetch);
+  const issues = await getJiraInboxIssues(jiraConfig);
 
   const print = options.print ?? console.log;
   if (!issues.length) {

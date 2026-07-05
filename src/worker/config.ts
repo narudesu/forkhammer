@@ -1,16 +1,22 @@
-import { loadConfig } from "../config";
-import { assertJiraConfigured } from "../jira";
-import type { SupabaseConfig } from "./types";
-import { requireSupabaseConfig } from "../supabase-config";
+import { type Config, loadConfig } from "../config/config";
+import { assertJiraConfigured } from "../jira/jira";
 
-export async function loadWorkerConfig(): Promise<{
-  supabase: SupabaseConfig;
-  jira: NonNullable<Awaited<ReturnType<typeof loadConfig>>["jira"]>;
-}> {
+export interface WorkerConfig {
+  jira: NonNullable<Config["jira"]>;
+  supabase: NonNullable<Config["supabase"]>;
+}
+
+export async function loadWorkerConfig(): Promise<WorkerConfig> {
   const config = await loadConfig();
-  await assertJiraConfigured(config);
+
+  const jiraConfig = await assertJiraConfigured(config);
+  const supabaseConfig = config.supabase;
+  if (!supabaseConfig) {
+    throw new Error("missing-supabase-config");
+  }
+
   return {
-    supabase: requireSupabaseConfig(config),
-    jira: config.jira!,
+    supabase: supabaseConfig,
+    jira: jiraConfig,
   };
 }

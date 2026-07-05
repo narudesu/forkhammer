@@ -1,6 +1,6 @@
 import toml from "smol-toml";
 import z from "zod";
-import type { Config } from "./config";
+import type { Config } from "../config/config";
 
 const zJiraComment = z.object({
   author: z.object({ displayName: z.string() }),
@@ -70,7 +70,6 @@ export type IssueComment = {
 
 export async function getJiraInboxIssues(
   config: NonNullable<Config["jira"]>,
-  runtimeFetch: typeof fetch,
 ): Promise<Array<JiraInboxIssue>> {
   const filterId = config.filters?.inbox?.filter_id;
   if (!filterId) {
@@ -94,7 +93,7 @@ export async function getJiraInboxIssues(
       "summary,status,priority,labels,description,assignee,reporter",
     );
 
-    const response = await runtimeFetch(url, {
+    const response = await fetch(url, {
       method: "GET",
       headers: {
         Authorization: `Basic ${Buffer.from(config.auth).toString("base64")}`,
@@ -163,7 +162,9 @@ export async function getIssueContext(
   };
 }
 
-export async function assertJiraConfigured(config: Config) {
+export async function assertJiraConfigured(
+  config: Config,
+): Promise<NonNullable<Config["jira"]>> {
   if (!config.jira) {
     throw new Error("jira-config-not-found");
   }
@@ -194,6 +195,8 @@ export async function assertJiraConfigured(config: Config) {
     const text = await response.text();
     throw new Error(`jira-auth-failed:${response.status}:${text}`);
   }
+
+  return config.jira;
 }
 
 export function formatIssueContext(issue: IssueContext) {

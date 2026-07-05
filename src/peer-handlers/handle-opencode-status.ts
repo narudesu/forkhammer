@@ -3,19 +3,19 @@ import type {
   Part,
   Project,
   Session,
-  SessionMessage,
-  SessionMessagesResponses,
   SessionStatus,
 } from "@opencode-ai/sdk/v2";
-import { createDefaultOpencodeClient, unwrapOpencodeData } from "src/opencode";
+import {
+  createDefaultOpencodeClient,
+  unwrapOpencodeData,
+} from "src/opencode/opencode";
 import type {
   OpencodeAgent,
   OpencodeProjectStatus,
   OpencodeSessionMessageStatus,
   OpencodeSessionStatus,
   PeerMessage,
-} from "src/peer-protocol";
-import { runBlock } from "src/worker/run-block";
+} from "src/peer-protocol/peer-protocol";
 
 export async function handleOpencodeStatus(
   msg: PeerMessage,

@@ -1,6 +1,6 @@
 import chalk from "chalk";
-import type { ExecutionContext } from "../context";
-import type { FeedEvent } from "../types";
+import type { WorkerContext } from "src/worker/context/types";
+import type { UltrafeedEvent } from "src/worker/feed/feed-events";
 import type { EventCursor, StoreSnapshot, WorkerStore } from "./types";
 
 type MessageCounterState = {
@@ -13,7 +13,7 @@ const MESSAGE_COUNTER_DEBOUNCE_MS = 5000;
 const storeLabel = chalk.cyan.bold("[message-counter]");
 
 export function createMessageCounterStore(
-  ctx: ExecutionContext,
+  _ctx: WorkerContext,
 ): WorkerStore<MessageCounterState> {
   const state: MessageCounterState = {
     totalReceived: 0,
@@ -27,7 +27,7 @@ export function createMessageCounterStore(
 
   return {
     name: "message-counter",
-    reduce(event: FeedEvent, cursor: EventCursor | null) {
+    reduce(event: UltrafeedEvent, cursor: EventCursor | null) {
       if (!isAfterCurrentCursor(cursor, event)) {
         return false;
       }
@@ -79,7 +79,7 @@ export function createMessageCounterStore(
 
 function isAfterCurrentCursor(
   cursor: EventCursor | null,
-  event: FeedEvent,
+  event: UltrafeedEvent,
 ) {
   if (!cursor) {
     return true;

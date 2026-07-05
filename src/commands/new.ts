@@ -1,10 +1,13 @@
-import { createOpencodeClient, type PermissionRuleset } from "@opencode-ai/sdk/v2";
+import {
+  createOpencodeClient,
+  type PermissionRuleset,
+} from "@opencode-ai/sdk/v2";
 import chalk from "chalk";
 import { execa } from "execa";
 import path from "node:path";
-import { loadConfig, type Config } from "../config";
-import { formatIssueContext, getIssueContext } from "../jira";
-import { unwrapOpencodeData } from "../opencode";
+import { loadConfig, type Config } from "../config/config";
+import { formatIssueContext, getIssueContext } from "../jira/jira";
+import { unwrapOpencodeData } from "../opencode/opencode";
 import { printValidationResult } from "./validation-format";
 import {
   validationStructuredResultSchema,

@@ -4,7 +4,7 @@ import type {
   MessageHandlerRegistry,
   PeerMessage,
   WorktreeInfo,
-} from "src/peer-protocol";
+} from "src/peer-protocol/peer-protocol";
 
 export type WorktreeLister = () => Promise<WorktreeInfo[]>;
 

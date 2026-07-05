@@ -1,153 +1,67 @@
+import { createEffect, createEvent, fork, sample, scopeBind } from "effector";
+import { onceEvent } from "src/effector/simple";
+import type { WorkerContext } from "src/worker/context/types";
+import type { UltrafeedEvent } from "src/worker/feed/feed-events";
 import { RealtimeEventBuffer } from "src/worker/realtime/event-buffer";
-import { REALTIME_CHANNEL_NAME } from "../constants";
-import type { ExecutionContext } from "../context";
-import {
-  processEvent,
-  ProcessEventStores,
-  reconcileStores,
-} from "../event-processor";
-import {
-  hydrateStores,
-  loadBackfillEvents,
-  persistDueSnapshots,
-} from "../state-manager";
-import type { ProcessResult, RealtimeChannelLike } from "../types";
+import { FeedChannel } from "src/worker/realtime/feed-channel";
 
-export interface RealtimeSubscriptionOptions {
-  createStores: (ctx: ExecutionContext) => ProcessEventStores;
+const unsubscribedChannel = createEvent();
+const subscribed = createEvent<SubscribedEventData>();
+
+export async function runRealtimeSubscriptionRound(
+  ctx: WorkerContext,
+): Promise<void> {
+  const buffer = new RealtimeEventBuffer();
+  const scope = fork();
+
+  const channel = await FeedChannel.initialize(ctx, {
+    onEvent: (event) => {
+      buffer.push(event);
+    },
+    onErrorStatus: () => {
+      channel.stop();
+    },
+    onUnsubscribed: () => {
+      buffer.close();
+      scopeBind(unsubscribedChannel, { scope })();
+    },
+    onSubscribed: () => {
+      scopeBind(subscribed, { scope })({ buffer });
+    },
+  });
+
+  // wait for unsubscribe, then return
+  await onceEvent(unsubscribedChannel, { scope });
 }
 
-export async function runRealtimeSubscription(
-  ctx: ExecutionContext,
-  options: RealtimeSubscriptionOptions,
-): Promise<ProcessResult> {
-  return new Promise<ProcessResult>((resolve) => {
-    let stopped = false;
-    let processingStarted = false;
+interface SubscribedEventData {
+  buffer: RealtimeEventBuffer;
+}
 
-    const buffer = new RealtimeEventBuffer();
-    const stores = options.createStores(ctx);
-    const seenEventIds = new Set<string>();
-    const cursor = {
-      current: null as { created_at: string; id: string } | null,
-    };
+const effectSubscribed = createEffect(
+  async ({ buffer }: SubscribedEventData) => {
+    let event: UltrafeedEvent | null = await buffer.next();
+    while (event) {
+      event = await buffer.next();
+    }
+  },
+);
 
-    const channel = ctx.supabase.client.channel(REALTIME_CHANNEL_NAME).on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: ctx.config.table,
-      },
-      (payload) => {
-        const event = payload.new;
-        ctx.log.debug("realtime insert received %s", event.id);
-        buffer.push(event);
-      },
-    );
+sample({
+  clock: subscribed,
+  target: effectSubscribed,
+});
 
-    const stop = async (
-      activeChannel: RealtimeChannelLike,
-      reason: string,
-      unauthorized: boolean,
-    ) => {
-      if (stopped) {
-        return;
-      }
-
-      stopped = true;
-      buffer.close();
-      ctx.log.debug("stopping realtime subscription: %s", reason);
-      await activeChannel.unsubscribe();
-      resolve({ unauthorized, processed: false });
-    };
-
-    const startProcessing = async () => {
-      if (processingStarted) {
-        return;
-      }
-
-      processingStarted = true;
-
-      try {
-        cursor.current = await hydrateStores(stores.workerStores);
-        const snapshotEvents = await loadBackfillEvents(ctx, cursor.current);
-        ctx.log.debug("loaded %d backfill events", snapshotEvents.length);
-
-        if (stopped) {
-          return;
-        }
-
-        for (const event of snapshotEvents) {
-          if (stopped) {
-            return;
-          }
-
-          await processEvent(ctx, event, stores, seenEventIds, cursor, {
-            reconcile: false,
-          });
-          await persistDueSnapshots(stores.workerStores, cursor.current);
-        }
-
-        let bufferedEvents = buffer.drain();
-        while (bufferedEvents.length > 0) {
-          if (stopped) {
-            return;
-          }
-
-          for (const event of bufferedEvents) {
-            if (stopped) {
-              return;
-            }
-
-            await processEvent(ctx, event, stores, seenEventIds, cursor, {
-              reconcile: false,
-            });
-            await persistDueSnapshots(stores, cursor.current);
-          }
-
-          bufferedEvents = buffer.drain();
-        }
-
-        if (stopped) {
-          return;
-        }
-
-        ctx.log.debug("projection caught up; reconciling stores");
-        await reconcileStores(ctx, stores.workerStores);
-        await persistDueSnapshots(stores.workerStores, cursor.current);
-
-        while (!stopped) {
-          const event = await buffer.next();
-          if (!event) {
-            break;
-          }
-
-          await processEvent(ctx, event, stores, seenEventIds, cursor, {
-            reconcile: true,
-          });
-          await persistDueSnapshots(stores.workerStores, cursor.current);
-        }
-      } catch (error) {
-        ctx.log.debug("realtime pipeline error %o", error);
-        await stop(channel, "realtime pipeline failed", false);
-      }
-    };
-
-    channel.subscribe((status: string) => {
-      ctx.log.debug("realtime channel status %s", status);
-
-      if (status === "SUBSCRIBED") {
-        void startProcessing();
-      }
-
-      if (
-        status === "TIMED_OUT" ||
-        status === "CHANNEL_ERROR" ||
-        status === "CLOSED"
-      ) {
-        void stop(channel, `realtime ${status.toLowerCase()}`, false);
-      }
-    });
-  });
+async function newStartProcessing() {
+  // current behavior:
+  // 1. hydrate stores from disk
+  // 2. we load backfill events - based on the resolved combined cursor
+  // 3. we process every backfill event with reconcile: false
+  // 4. we persist snapshots
+  // 5. we load buffered events
+  // 6. we process every buferred event one after another with reconcile: false
+  // 7. we persist snapshots
+  // 8. we reconcile stores
+  // 9. we persist snapshots
+  // 10. while not stopped, we get next event from the buffer, process it and reconcile
 }

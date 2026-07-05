@@ -1,5 +1,8 @@
-import { createDefaultOpencodeClient, unwrapOpencodeData } from "src/opencode";
-import type { PeerMessage } from "src/peer-protocol";
+import {
+  createDefaultOpencodeClient,
+  unwrapOpencodeData,
+} from "src/opencode/opencode";
+import type { PeerMessage } from "src/peer-protocol/peer-protocol";
 
 export async function handleOpencodeSessionPrompt(
   msg: PeerMessage,

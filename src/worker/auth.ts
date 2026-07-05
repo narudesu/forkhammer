@@ -1,67 +1,67 @@
-import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { SupabaseAuthToken } from "src/worker/auth-token";
+import type { WorkerConfig } from "src/worker/config";
 import { parseLoginResponse } from "./domain";
-import type { SupabaseConfig } from "./types";
 
-export async function login(config: SupabaseConfig, fetchFn: typeof fetch) {
-  if (config.auth.type === "password") {
-    const client = createClient(config.url, config.anonKey, {
-      auth: {
-        autoRefreshToken: false,
-        detectSessionInUrl: false,
-        persistSession: false,
-      },
-      global: {
-        fetch: fetchFn,
-      },
-    });
+export abstract class SupabaseAuth {
+  abstract login(): Promise<void>;
+  abstract activeTokenOrFail(): SupabaseAuthToken;
 
-    const { data, error } = await client.auth.signInWithPassword({
-      email: config.auth.email,
-      password: config.auth.password,
-    });
+  static create = createSupabaseAuth;
+}
 
-    if (error) {
-      throw new Error(`supabase-auth-failed:${error.message}`);
-    }
+export interface CreateSupabaseAuthOpts {
+  config: WorkerConfig;
+  supabase: SupabaseClient;
+}
 
-    const token = data.session?.access_token;
-    if (!token) {
-      throw new Error("supabase-auth-token-missing");
-    }
+export function createSupabaseAuth(opts: CreateSupabaseAuthOpts): SupabaseAuth {
+  const supabaseConfig = opts.config.supabase;
+  const supabase = opts.supabase;
+  const authConfig = opts.config.supabase.auth;
 
-    return token;
-  }
+  const state: { activeToken: SupabaseAuthToken | null } = {
+    activeToken: null,
+  };
 
-  const secretString = config.auth.secretString.trim();
-  if (secretString.length === 0) {
-    throw new Error("supabase-auth-failed:secret_string-empty");
-  }
-
-  const response = await fetchFn(config.auth.functionUrl, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${config.anonKey}`,
-      apikey: config.anonKey,
-      Accept: "application/json",
-      "Content-Type": "application/json",
+  return {
+    activeTokenOrFail() {
+      if (!state.activeToken) {
+        throw new Error("not-logged-in");
+      }
+      return state.activeToken;
     },
-    body: JSON.stringify({ secret_string: secretString }),
-  });
+    async login() {
+      const response = await fetch(authConfig.function_url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${supabaseConfig.anon_key}`,
+          apikey: supabaseConfig.anon_key,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ secret_string: authConfig.secret_string }),
+      });
 
-  const rawBody = await response.text();
-  const parsed = parseLoginResponse(rawBody, response.ok);
+      const rawBody = await response.text();
+      const parsed = parseLoginResponse(rawBody, response.ok);
 
-  if (!parsed.responseOk) {
-    const message =
-      parsed.payloadError ??
-      parsed.payloadMessage ??
-      (parsed.rawBody.trim() || `${response.status} ${response.statusText}`);
-    throw new Error(`supabase-auth-failed:${message}`);
-  }
+      if (!parsed.responseOk) {
+        const message =
+          parsed.payloadError ??
+          parsed.payloadMessage ??
+          (parsed.rawBody.trim() ||
+            `${response.status} ${response.statusText}`);
+        throw new Error(`supabase-auth-failed:${message}`);
+      }
 
-  if (!parsed.token) {
-    throw new Error("supabase-auth-token-missing");
-  }
+      if (!parsed.token) {
+        throw new Error("supabase-auth-token-missing");
+      }
 
-  return parsed.token;
+      supabase.realtime.setAuth(parsed.token);
+
+      state.activeToken = SupabaseAuthToken.fromString(parsed.token);
+    },
+  };
 }

@@ -1,11 +1,11 @@
 import { createEffect } from "effector";
-import { getJiraInboxIssues } from "src/jira";
-import type { ExecutionContext } from "src/worker/context";
+import { getJiraInboxIssues } from "src/jira/jira";
+import type { WorkerContext } from "src/worker/context/types";
 
 export const effectFetchArtifact = createEffect(
-  async (opts: { ctx: ExecutionContext }) => {
+  async (opts: { ctx: WorkerContext }) => {
     const { ctx } = opts;
-    const jiraConfig = ctx.jira;
+    const jiraConfig = ctx.workerConfig.jira;
 
     ctx.log.debug("effect fetch artifact");
 
@@ -18,11 +18,11 @@ export const effectFetchArtifact = createEffect(
       throw new Error("filter-not-defined");
     }
 
-    const userId = await ctx.supabase.getUserId();
-    const issues = await getJiraInboxIssues(jiraConfig, ctx.runtime.fetch);
+    const userId = ctx.auth.activeTokenOrFail().getUserId();
+    const issues = await getJiraInboxIssues(jiraConfig);
 
     const id = crypto.randomUUID();
-    await ctx.supabase.client.from("jira_artifacts").insert([
+    await ctx.supabase.from("jira_artifacts").insert([
       {
         id,
         user_id: userId,
@@ -30,7 +30,7 @@ export const effectFetchArtifact = createEffect(
       },
     ]);
 
-    await ctx.supabase.client.from(ctx.config.table).insert([
+    await ctx.supabase.from(ctx.workerConfig.supabase.table).insert([
       {
         event_type: "inserted_artifact",
         data: {

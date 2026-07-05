@@ -1,15 +1,14 @@
-import type { FeedEvent } from "../types";
+import type { UltrafeedEvent } from "src/worker/feed/feed-events";
 
-type PendingResolver = (event: FeedEvent | null) => void;
+type PendingResolver = (event: UltrafeedEvent | null) => void;
 
 export class RealtimeEventBuffer {
-  private readonly events: Array<FeedEvent> = [];
-
+  private readonly events: Array<UltrafeedEvent> = [];
   private readonly waiters: Array<PendingResolver> = [];
 
   private closed = false;
 
-  push(event: FeedEvent) {
+  push(event: UltrafeedEvent) {
     if (this.closed) {
       return;
     }
@@ -23,12 +22,6 @@ export class RealtimeEventBuffer {
     this.events.push(event);
   }
 
-  drain() {
-    const drained = [...this.events];
-    this.events.length = 0;
-    return drained;
-  }
-
   next() {
     const queued = this.events.shift();
     if (queued) {
@@ -39,7 +32,7 @@ export class RealtimeEventBuffer {
       return Promise.resolve(null);
     }
 
-    return new Promise<FeedEvent | null>((resolve) => {
+    return new Promise<UltrafeedEvent | null>((resolve) => {
       this.waiters.push(resolve);
     });
   }

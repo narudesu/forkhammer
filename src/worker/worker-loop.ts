@@ -1,45 +1,27 @@
-import { formatError } from "src/error-format";
+import { formatError } from "src/error-handling/error-format";
 import { RETRY_DELAY_MS } from "src/worker/constants";
-import type { ExecutionContext } from "src/worker/context";
-import {
-  type RealtimeSubscriptionOptions,
-  runRealtimeSubscription,
-} from "src/worker/realtime/realtime";
+import type { WorkerContext } from "src/worker/context/types";
+import { runRealtimeSubscriptionRound } from "src/worker/realtime/realtime";
+import { sleepMs } from "src/worker/sleep";
 
-async function runWorkerLoop(
-  ctx: ExecutionContext,
-  options: { realtime: RealtimeSubscriptionOptions },
-) {
+export async function runWorkerLoop(ctx: WorkerContext) {
   ctx.log.debug("started worker loop");
   while (true) {
     try {
-      const token = await ctx.auth.login();
-      ctx.supabase.setAccessToken(token);
-      ctx.log.debug("got access token");
-      ctx.log.debug("starting realtime subscription");
+      await ctx.auth.login();
+      ctx.log.debug("logged in");
 
-      const realtimeResult = await runRealtimeSubscription(
-        ctx,
-        options.realtime,
-      );
-      if (realtimeResult.unauthorized) {
-        ctx.log.debug("reauthorizing worker");
-        continue;
-      }
+      await runRealtimeSubscriptionRound(ctx);
 
       ctx.log.debug(
         "realtime subscription ended, retrying in %dms",
         RETRY_DELAY_MS,
       );
-      await ctx.runtime.sleep(RETRY_DELAY_MS);
+      await sleepMs(RETRY_DELAY_MS);
     } catch (error) {
       ctx.log.error("worker loop error\n%s", formatError(error));
       ctx.log.debug("retrying realtime subscription in %dms", RETRY_DELAY_MS);
-      await ctx.runtime.sleep(RETRY_DELAY_MS);
+      await sleepMs(RETRY_DELAY_MS);
     }
   }
 }
-
-export const WorkerLoop = {
-  run: runWorkerLoop,
-};

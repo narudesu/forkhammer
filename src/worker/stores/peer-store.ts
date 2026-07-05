@@ -1,17 +1,17 @@
 import debug from "debug";
-import type { PeerClient } from "src/peer-client";
 import { handleOpencodeSessionCreate } from "src/peer-handlers/handle-opencode-session-create";
 import { handleOpencodeSessionPrompt } from "src/peer-handlers/handle-opencode-session-prompt";
 import { handleOpencodeStatus } from "src/peer-handlers/handle-opencode-status";
 import { handleWorktreeList } from "src/peer-handlers/handle-worktree-list";
-import type { ExecutionContext } from "src/worker/context";
+import type { PeerClient } from "src/peer-protocol/peer-client";
+import type { WorkerContext } from "src/worker/context/types";
 import { parseUltrafeedEventData } from "src/worker/events";
+import type { UltrafeedEvent } from "src/worker/feed/feed-events";
 import type {
   EventCursor,
   StoreSnapshot,
   WorkerStore,
 } from "src/worker/stores/types";
-import type { FeedEvent } from "src/worker/types";
 import z from "zod";
 
 const log = debug("app:peer");
@@ -24,7 +24,7 @@ type PeerStoreState = {
 };
 
 export function createPeerStore(
-  _ctx: ExecutionContext,
+  _ctx: WorkerContext,
   client: PeerClient,
 ): WorkerStore<PeerStoreState> {
   const state: PeerStoreState = {
@@ -62,7 +62,7 @@ export function createPeerStore(
 
   return {
     name: "peer",
-    reduce(event: FeedEvent, _cursor: EventCursor | null) {
+    reduce(event: UltrafeedEvent, _cursor: EventCursor | null) {
       const browserPeerReadyEvent = z
         .object({
           event_type: z.literal("browser_peer_ready"),

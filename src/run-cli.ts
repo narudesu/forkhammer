@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { runJiraInbox } from "./commands/jira";
 import { runQueueAdd, runQueueList, runQueueRead } from "./commands/queue";
-import { runWorker } from "./worker";
+import { runWorker } from "./run-worker";
 
 async function runCli() {
   const program = new Command()

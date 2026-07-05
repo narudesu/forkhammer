@@ -1,6 +1,9 @@
 import { createOpencodeClient } from "@opencode-ai/sdk/v2";
-import { unwrapOpencodeData } from "src/opencode";
-import type { PeerMessage, WorktreeInfo } from "src/peer-protocol";
+import { unwrapOpencodeData } from "src/opencode/opencode";
+import type {
+  PeerMessage,
+  WorktreeInfo,
+} from "src/peer-protocol/peer-protocol";
 
 export async function handleWorktreeList(
   msg: PeerMessage,

@@ -1,122 +1,72 @@
-import createDebug from "debug";
 import { createClient } from "@supabase/supabase-js";
+import createDebug from "debug";
+import { SupabaseAuth } from "src/worker/auth";
+import type { WorkerConfig } from "src/worker/config";
+import type { WorkerContext } from "src/worker/context/types";
+import type { ProcessEventStores } from "src/worker/event-processor";
+import { UltrafeedWriter } from "src/worker/ultrafeed-writer";
 import { runIssuePrompt, runIssueValidation } from "../commands/new";
-import type { Config } from "../config";
-import { login } from "./auth";
-import { emitEvent } from "./event-emitter";
-import type { SupabaseConfig, SupabaseClientLike } from "./types";
 
-export type ExecutionContext = {
-  config: SupabaseConfig;
-  jira?: Config["jira"];
-  supabase: {
-    client: SupabaseClientLike;
-    setAccessToken: (token: string) => void;
-    getUserId: () => Promise<string>;
-  };
-  auth: {
-    login: () => Promise<string>;
-  };
-  validation: {
-    runIssueValidation: (input: { key: string }) => Promise<void>;
-    runIssuePrompt: (input: {
-      issueKey: string;
-      requestEventId: string;
-      prompt: string;
-      projectKey: string;
-      projectName: string;
-      projectId: string;
-      sessionId: string;
-      worktreeName: string;
-      worktreeBranch: string;
-      worktreeDirectory: string;
-    }) => Promise<void>;
-  };
-  runtime: {
-    sleep: (ms: number) => Promise<void>;
-    fetch: typeof fetch;
-  };
-  log: {
-    debug: (message: string, ...args: unknown[]) => void;
-    warn: (message: string, ...args: unknown[]) => void;
-    error: (message: string, ...args: unknown[]) => void;
-  };
-};
-
-export function createExecutionContext(workerConfig: {
-  supabase: SupabaseConfig;
-  jira?: Config["jira"];
-}): ExecutionContext {
+export function createWorkerContext(
+  workerConfig: WorkerConfig,
+  options: {
+    realtime: RealtimeSubscriptionOptions | false;
+  },
+): WorkerContext {
   const debug = createDebug("app:supabase-worker");
-  let workerAccessToken: string | null = null;
 
-  const client = createClient(
+  const supabase = createClient(
     workerConfig.supabase.url,
-    workerConfig.supabase.anonKey,
+    workerConfig.supabase.anon_key,
     {
       auth: {
         autoRefreshToken: true,
         detectSessionInUrl: false,
         persistSession: false,
       },
-      accessToken: async () => workerAccessToken,
+      accessToken: async () => auth.activeTokenOrFail().getToken(),
     },
-  ) as unknown as SupabaseClientLike;
+  );
 
-  const ctx: ExecutionContext = {
-    config: workerConfig.supabase,
-    jira: workerConfig.jira,
-    supabase: {
-      client,
-      setAccessToken: (token) => {
-        workerAccessToken = token;
-        client.realtime.setAuth(token);
-      },
-      getUserId: async () => {
-        if (!workerAccessToken) {
-          throw new Error("supabase-user-missing");
-        }
+  const writer = UltrafeedWriter.createForWorker({
+    config: workerConfig,
+    supabase,
+  });
 
-        const userId = decodeUserIdFromAccessToken(workerAccessToken);
-        if (!userId) {
-          throw new Error("supabase-user-missing");
-        }
+  const auth = SupabaseAuth.create({
+    config: workerConfig,
+    supabase,
+  });
 
-        return userId;
-      },
-    },
-    auth: {
-      login: () => login(workerConfig.supabase, fetch),
-    },
+  const ctx: WorkerContext = {
+    stores: { workerStores: [], extraReconcilables: [] },
+    workerConfig,
+    writer,
+    supabase,
+    auth,
     validation: {
       runIssueValidation: async (input) => {
         await runIssueValidation({
           key: input.key,
           streamEvents: false,
           hooks: {
-            onStarted: async (payload) => {
-              await emitEvent(
-                workerConfig.supabase,
-                client,
-                "validate_issue_started",
-                payload,
-              );
+            onStarted: async (data) => {
+              await writer.write({
+                eventType: "validate_issue_started",
+                data,
+              });
             },
-            onSucceeded: async (payload) => {
-              await emitEvent(
-                workerConfig.supabase,
-                client,
-                "issue_validated",
-                payload,
-              );
+            onSucceeded: async (data) => {
+              await writer.write({
+                eventType: "issue_validated",
+                data,
+              });
             },
-            onFailed: async (payload) => {
-              await emitEvent(
-                workerConfig.supabase,
-                client,
-                "issue_validation_failed",
-                payload,
-              );
+            onFailed: async (data) => {
+              await writer.write({
+                eventType: "issue_validation_failed",
+                data,
+              });
             },
           },
         });
@@ -125,29 +75,21 @@ export function createExecutionContext(workerConfig: {
         await runIssuePrompt({
           ...input,
           hooks: {
-            onPromptCompleted: async (payload) => {
-              await emitEvent(
-                workerConfig.supabase,
-                client,
-                "validate_issue_prompt_completed",
-                payload,
-              );
+            onPromptCompleted: async (data) => {
+              await writer.write({
+                eventType: "validate_issue_prompt_completed",
+                data,
+              });
             },
-            onPromptFailed: async (payload) => {
-              await emitEvent(
-                workerConfig.supabase,
-                client,
-                "validate_issue_prompt_failed",
-                payload,
-              );
+            onPromptFailed: async (data) => {
+              await writer.write({
+                eventType: "validate_issue_prompt_failed",
+                data,
+              });
             },
           },
         });
       },
-    },
-    runtime: {
-      sleep,
-      fetch,
     },
     log: {
       debug,
@@ -156,38 +98,13 @@ export function createExecutionContext(workerConfig: {
     },
   };
 
+  if (options.realtime) {
+    ctx.stores = options.realtime.createStores(ctx);
+  }
+
   return ctx;
 }
 
-function sleep(ms: number) {
-  return new Promise<void>((resolve) => setTimeout(resolve, ms));
-}
-
-function decodeUserIdFromAccessToken(accessToken: string) {
-  const parts = accessToken.split(".");
-  if (parts.length < 2) {
-    return null;
-  }
-
-  try {
-    const payload = JSON.parse(
-      Buffer.from(base64UrlToBase64(parts[1]), "base64").toString("utf-8"),
-    ) as Record<string, unknown>;
-
-    const userId = payload.sub ?? payload.user_id;
-    return typeof userId === "string" && userId.length > 0 ? userId : null;
-  } catch {
-    return null;
-  }
-}
-
-function base64UrlToBase64(value: string) {
-  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
-  const padding = normalized.length % 4;
-
-  if (padding === 0) {
-    return normalized;
-  }
-
-  return normalized + "=".repeat(4 - padding);
+export interface RealtimeSubscriptionOptions {
+  createStores: (ctx: WorkerContext) => ProcessEventStores;
 }

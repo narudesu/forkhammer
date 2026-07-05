@@ -1,9 +1,9 @@
 import { createEvent } from "effector";
-import type { ExecutionContext } from "./context";
 import type { ReconcilableStore, WorkerStore } from "./stores/types";
-import type { FeedEvent, ProcessResult } from "./types";
+import type { WorkerContext } from "src/worker/context/types";
+import type { UltrafeedEvent } from "src/worker/feed/feed-events";
 
-export const feedEventReceived = createEvent<FeedEvent>();
+export const feedEventReceived = createEvent<UltrafeedEvent>();
 
 export interface ProcessEventStores {
   workerStores: WorkerStore<any>[];
@@ -11,20 +11,19 @@ export interface ProcessEventStores {
 }
 
 export async function processEvent(
-  ctx: ExecutionContext,
-  event: FeedEvent,
+  ctx: WorkerContext,
+  event: UltrafeedEvent,
   stores: ProcessEventStores,
   seenEventIds: Set<string>,
   cursor: { current: { created_at: string; id: string } | null },
   options: { reconcile?: boolean } = {},
-): Promise<ProcessResult> {
+): Promise<void> {
   if (seenEventIds.has(event.id)) {
     ctx.log.debug(
       "skipping duplicate event %s (%s)",
       event.id,
       event.event_type,
     );
-    return { unauthorized: false, processed: false };
   }
 
   seenEventIds.add(event.id);
@@ -46,12 +45,10 @@ export async function processEvent(
       ...stores.extraReconcilables,
     ]);
   }
-
-  return { unauthorized: false, processed: true };
 }
 
 export async function reconcileStores(
-  ctx: ExecutionContext,
+  ctx: WorkerContext,
   stores: Array<ReconcilableStore>,
 ) {
   await Promise.all(

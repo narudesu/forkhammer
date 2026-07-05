@@ -1,47 +1,45 @@
-import { createClient } from "@supabase/supabase-js";
 import chalk from "chalk";
-import { loadConfig, type Config } from "../config";
-import { login } from "../worker/auth";
-import { emitEvent } from "../worker/event-emitter";
+import { loadConfig, type Config } from "src/config/config";
+import { loadWorkerConfig } from "src/worker/config";
+import { createWorkerContext } from "src/worker/context";
+import type { WorkerContext } from "src/worker/context/types";
 import {
   parseUltrafeedEventData,
   ultrafeedWorkerEmittedEventTypes,
   type UltrafeedEventData,
   type ValidationStructuredResult,
-} from "../worker/events";
-import type {
-  FeedEvent,
-  SupabaseClientLike,
-  SupabaseConfig,
-} from "../worker/types";
-import { requireSupabaseConfig } from "../supabase-config";
+} from "src/worker/events";
+import type { UltrafeedEvent } from "src/worker/feed/feed-events";
 import { printValidationResult } from "./validation-format";
 
 const RECENT_EVENT_LIMIT = 50;
 const ISSUE_READ_LIMIT = 200;
 
-type QueueContext = {
-  appConfig: Config;
-  supabaseConfig: SupabaseConfig;
-  client: SupabaseClientLike;
-};
-
-type ParsedQueueEvent = FeedEvent & {
+type ParsedQueueEvent = UltrafeedEvent & {
   data: UltrafeedEventData<"validate_issue_requested">;
 };
 
-export async function runQueueAdd(issueKey: string, json = false) {
-  const context = await loadQueueContext();
-  const project = resolveProjectFromIssueKey(context.appConfig, issueKey);
+async function loadQueueContext() {
+  const workerConfig = await loadWorkerConfig();
+  const ctx = createWorkerContext(workerConfig, {
+    realtime: false,
+  });
 
-  await emitEvent(
-    context.supabaseConfig,
-    context.client,
-    "validate_issue_requested",
-    {
+  return ctx;
+}
+
+export async function runQueueAdd(issueKey: string, json = false) {
+  const appConfig = await loadConfig();
+  const ctx = await loadQueueContext();
+
+  const project = resolveProjectFromIssueKey(appConfig, issueKey);
+
+  await ctx.writer.write({
+    eventType: "validate_issue_requested",
+    data: {
       issue_key: issueKey,
     },
-  );
+  });
 
   if (json) {
     console.log(
@@ -167,36 +165,12 @@ export function resolveProjectFromIssueKey(config: Config, issueKey: string) {
   throw new Error(`project-not-found-for-issue:${issueKey}`);
 }
 
-async function loadQueueContext(): Promise<QueueContext> {
-  const appConfig = await loadConfig();
-  const supabaseConfig = requireSupabaseConfig(appConfig);
-  const token = await login(supabaseConfig, fetch);
-
-  const client = createClient(supabaseConfig.url, supabaseConfig.anonKey, {
-    auth: {
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-      persistSession: false,
-    },
-    accessToken: async () => token,
-    global: {
-      fetch,
-    },
-  }) as unknown as SupabaseClientLike;
-
-  return {
-    appConfig,
-    supabaseConfig,
-    client,
-  };
-}
-
 async function loadRecentQueueEvents(
-  context: QueueContext,
+  context: WorkerContext,
   limit: number,
 ): Promise<Array<ParsedQueueEvent>> {
-  const { data, error } = await context.client
-    .from(context.supabaseConfig.table)
+  const { data, error } = await context.supabase
+    .from(context.workerConfig.supabase.table)
     .select("*")
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -210,7 +184,7 @@ async function loadRecentQueueEvents(
     .filter((event): event is ParsedQueueEvent => event !== null);
 }
 
-function toParsedQueueEvent(event: FeedEvent): ParsedQueueEvent | null {
+function toParsedQueueEvent(event: UltrafeedEvent): ParsedQueueEvent | null {
   const data = parseUltrafeedEventData(event.event_type, event.data);
   if (!data || !hasIssueKey(data)) {
     return null;
