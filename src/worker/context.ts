@@ -6,6 +6,7 @@ import type { WorkerContext } from "src/worker/context/types";
 import { ResolvablePromise } from "src/worker/resolvable-promise";
 import { UltrafeedWriter } from "src/worker/ultrafeed-writer";
 import { runIssuePrompt, runIssueValidation } from "../commands/new";
+import { EffectorSnapshotRepository } from "src/worker/stores/effector-snapshots";
 
 export function createWorkerContext(workerConfig: WorkerConfig): WorkerContext {
   const debug = createDebug("app:supabase-worker");
@@ -39,11 +40,16 @@ export function createWorkerContext(workerConfig: WorkerConfig): WorkerContext {
   });
   authPromise.resolve(auth);
 
+  const snapshots = EffectorSnapshotRepository.create({
+    directory: workerConfig.worker.snapshots.directory,
+  });
+
   const ctx: WorkerContext = {
     workerConfig,
     writer,
     supabase,
     auth,
+    snapshots,
     validation: {
       runIssueValidation: async (input) => {
         await runIssueValidation({

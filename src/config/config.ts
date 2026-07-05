@@ -32,6 +32,11 @@ const zConfig = z.object({
     })
     .optional(),
   project: z.record(z.string(), zProjectConfig).optional(),
+  worker: z.object({
+    snapshots: z.object({
+      directory: z.string().min(1),
+    }),
+  }),
   supabase: z
     .object({
       url: z.url(),

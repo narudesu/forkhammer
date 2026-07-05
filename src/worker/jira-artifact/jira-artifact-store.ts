@@ -2,32 +2,47 @@ import { createStore, sample } from "effector";
 import { produce } from "immer";
 import { reconcileRequested } from "src/worker/events/store-events";
 import { effectFetchArtifact } from "src/worker/jira-artifact/effect-fetch-artifact";
+import { feedEventReceived } from "src/worker/jira-artifact/jira-artifact-events";
+import { HydratableStore } from "src/worker/stores/effector-snapshots";
 import {
-  artifactInserted,
-  inboxRefetchRequested,
-} from "src/worker/jira-artifact/jira-artifact-events";
+  isAfterCurrentCursor,
+  type EventCursor,
+} from "src/worker/stores/types";
 
 export interface JiraArtifactStoreState {
   isRefetchRequested: boolean;
+  cursor: EventCursor | null;
 }
 
-export const $jiraArtifactRequests = createStore<JiraArtifactStoreState>({
-  isRefetchRequested: false,
-});
+export const $jiraArtifactRequests = createStore<JiraArtifactStoreState>(
+  {
+    isRefetchRequested: false,
+    cursor: null,
+  },
+  { sid: "jira-artifact-requests" },
+);
 
-$jiraArtifactRequests
-  .on(inboxRefetchRequested, (state) =>
-    produce(state, (state) => {
-      console.log("refetch requested");
+export const hydratableArtifactStore = HydratableStore.fromEffectorStore(
+  $jiraArtifactRequests,
+);
+
+$jiraArtifactRequests.on(feedEventReceived, (state, action) =>
+  produce(state, (state) => {
+    if (!isAfterCurrentCursor(state.cursor, action)) {
+      return;
+    }
+
+    state.cursor = { id: action.id, created_at: action.created_at };
+    if (action.event_type === "artifact_refresh_requested") {
       state.isRefetchRequested = true;
-    }),
-  )
-  .on(artifactInserted, (state) =>
-    produce(state, (state) => {
-      console.log("artifact inserted");
+      return;
+    }
+    if (action.event_type === "inserted_artifact") {
       state.isRefetchRequested = false;
-    }),
-  );
+      return;
+    }
+  }),
+);
 
 // start fetch effect unless it's already running
 sample({
@@ -40,7 +55,3 @@ sample({
   fn: (_, payload) => payload,
   target: effectFetchArtifact,
 });
-
-export function getJiraInboxArtifactStoreName() {
-  return "jira-artifact-store";
-}

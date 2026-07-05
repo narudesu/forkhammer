@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { WorkerConfig } from "src/worker/config";
 import type { UltrafeedEvent } from "src/worker/feed/feed-events";
+import type { EventCursor } from "src/worker/stores/types";
 import { ultrafeedEventSchemas } from "./events";
 
 export abstract class UltrafeedWriter {
@@ -34,15 +35,14 @@ function createUltrafeedWriter(opts: {
   const readPageSize = 1000;
 
   return {
-    async read({ since }) {
+    async read({ after }) {
       const events: UltrafeedEvent[] = [];
-      let cursor: { created_at: string; id: string } | null = null;
+      let cursor: EventCursor | null = after;
 
       while (true) {
         let query = supabase
           .from(opts.config.tableName)
           .select("id, created_at, event_type, data")
-          .gte("created_at", since)
           .order("created_at", { ascending: true })
           .order("id", { ascending: true })
           .limit(readPageSize);
@@ -51,6 +51,8 @@ function createUltrafeedWriter(opts: {
           query = query.or(
             `created_at.gt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.gt.${cursor.id})`,
           );
+        } else {
+          query = query.gte("created_at", new Date(0).toISOString());
         }
 
         const { data, error } = await query;
@@ -99,5 +101,5 @@ export interface UltrafeedWriterItem {
   data: unknown;
 }
 interface ReadOptions {
-  since: string;
+  after: EventCursor | null;
 }

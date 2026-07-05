@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SupabaseAuth } from "src/worker/auth";
 import type { WorkerConfig } from "src/worker/config";
+import type { EffectorSnapshotRepository } from "src/worker/stores/effector-snapshots";
 import type { UltrafeedWriter } from "src/worker/ultrafeed-writer";
 
 export interface WorkerContext {
@@ -9,6 +10,7 @@ export interface WorkerContext {
   auth: SupabaseAuth;
   writer: UltrafeedWriter;
   validation: WorkerValidation;
+  snapshots: EffectorSnapshotRepository;
   log: WorkerLogger;
 }
 

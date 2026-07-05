@@ -18,6 +18,10 @@ auth = "email@example.com:api_token"
 [jira.filters.inbox]
 # filter_id = "12345"
 
+[worker.snapshots]
+# local folder used by the worker for event-sourced projection snapshots
+directory = "/home/you/.local/state/forkhammer/snapshots"
+
 # under the project key, list all jira project you want to work on
 # this is so that forkhammer knows which issue key belongs to which directory
 [project.my-project]

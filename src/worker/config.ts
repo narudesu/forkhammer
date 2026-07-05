@@ -4,6 +4,7 @@ import { assertJiraConfigured } from "../jira/jira";
 export interface WorkerConfig {
   jira: NonNullable<Config["jira"]>;
   supabase: NonNullable<Config["supabase"]>;
+  worker: NonNullable<Config["worker"]>;
 }
 
 export async function loadWorkerConfig(): Promise<WorkerConfig> {
@@ -18,5 +19,6 @@ export async function loadWorkerConfig(): Promise<WorkerConfig> {
   return {
     supabase: supabaseConfig,
     jira: jiraConfig,
+    worker: config.worker,
   };
 }

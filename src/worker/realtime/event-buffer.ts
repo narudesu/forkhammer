@@ -37,6 +37,10 @@ export class RealtimeEventBuffer {
     });
   }
 
+  drain() {
+    return this.events.splice(0, this.events.length);
+  }
+
   close() {
     this.closed = true;
 

@@ -5,6 +5,41 @@ export type EventCursor = {
   id: string;
 };
 
+export function isAfterCurrentCursor(
+  cursor: EventCursor | null,
+  event: UltrafeedEvent,
+) {
+  if (!cursor) {
+    return true;
+  }
+
+  if (event.created_at !== cursor.created_at) {
+    return event.created_at > cursor.created_at;
+  }
+
+  return event.id > cursor.id;
+}
+
+export function getEarliestCursor(cursors: (EventCursor | null)[]) {
+  let earliest: EventCursor | null = null;
+
+  for (const cursor of cursors) {
+    if (!cursor) {
+      continue;
+    }
+
+    if (
+      !earliest ||
+      cursor.created_at < earliest.created_at ||
+      (cursor.created_at === earliest.created_at && cursor.id < earliest.id)
+    ) {
+      earliest = cursor;
+    }
+  }
+
+  return earliest;
+}
+
 export type StoreSnapshot<TState = unknown> = {
   version: 1;
   reducedEventsSinceSnapshot: number;
