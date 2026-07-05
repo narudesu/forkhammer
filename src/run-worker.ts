@@ -8,12 +8,7 @@ export async function runWorker() {
   ensureWebRtcGlobals();
 
   const workerConfig = await loadWorkerConfig();
-  const ctx = createWorkerContext(workerConfig, {
-    realtime: {
-      // worker stores drive the application
-      createStores: (ctx) => createWorkerStores(ctx),
-    },
-  });
+  const ctx = createWorkerContext(workerConfig);
 
   await runWorkerLoop(ctx);
 }

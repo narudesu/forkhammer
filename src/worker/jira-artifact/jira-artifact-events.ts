@@ -1,5 +1,8 @@
-import { feedEventReceived } from "src/worker/event-processor";
+import { createEvent } from "effector";
 import { ultrafeedEventSchemas } from "src/worker/events";
+import type { UltrafeedEvent } from "src/worker/feed/feed-events";
+
+export const feedEventReceived = createEvent<UltrafeedEvent>();
 
 export const inboxRefetchRequested = feedEventReceived.filterMap((item) => {
   if (item.event_type !== "artifact_refresh_requested") {

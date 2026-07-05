@@ -3,17 +3,11 @@ import createDebug from "debug";
 import { SupabaseAuth } from "src/worker/auth";
 import type { WorkerConfig } from "src/worker/config";
 import type { WorkerContext } from "src/worker/context/types";
-import type { ProcessEventStores } from "src/worker/event-processor";
+import { ResolvablePromise } from "src/worker/resolvable-promise";
 import { UltrafeedWriter } from "src/worker/ultrafeed-writer";
 import { runIssuePrompt, runIssueValidation } from "../commands/new";
-import { ResolvablePromise } from "src/worker/resolvable-promise";
 
-export function createWorkerContext(
-  workerConfig: WorkerConfig,
-  options: {
-    realtime: RealtimeSubscriptionOptions | false;
-  },
-): WorkerContext {
+export function createWorkerContext(workerConfig: WorkerConfig): WorkerContext {
   const debug = createDebug("app:supabase-worker");
 
   const authPromise = ResolvablePromise.create<SupabaseAuth>();
@@ -46,7 +40,6 @@ export function createWorkerContext(
   authPromise.resolve(auth);
 
   const ctx: WorkerContext = {
-    stores: { workerStores: [], extraReconcilables: [] },
     workerConfig,
     writer,
     supabase,
@@ -105,13 +98,5 @@ export function createWorkerContext(
     },
   };
 
-  if (options.realtime) {
-    ctx.stores = options.realtime.createStores(ctx);
-  }
-
   return ctx;
-}
-
-export interface RealtimeSubscriptionOptions {
-  createStores: (ctx: WorkerContext) => ProcessEventStores;
 }

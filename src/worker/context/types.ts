@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SupabaseAuth } from "src/worker/auth";
 import type { WorkerConfig } from "src/worker/config";
-import type { ProcessEventStores } from "src/worker/event-processor";
 import type { UltrafeedWriter } from "src/worker/ultrafeed-writer";
 
 export interface WorkerContext {
@@ -11,7 +10,6 @@ export interface WorkerContext {
   writer: UltrafeedWriter;
   validation: WorkerValidation;
   log: WorkerLogger;
-  stores: ProcessEventStores;
 }
 
 export interface WorkerLogger {

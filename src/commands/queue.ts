@@ -21,9 +21,7 @@ type ParsedQueueEvent = UltrafeedEvent & {
 
 async function loadQueueContext() {
   const workerConfig = await loadWorkerConfig();
-  const ctx = createWorkerContext(workerConfig, {
-    realtime: false,
-  });
+  const ctx = createWorkerContext(workerConfig);
 
   return ctx;
 }
