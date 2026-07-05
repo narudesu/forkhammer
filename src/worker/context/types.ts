@@ -1,7 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { PeerClient } from "src/peer-protocol/peer-client";
 import type { SupabaseAuth } from "src/worker/auth";
 import type { WorkerConfig } from "src/worker/config";
-import type { EffectorSnapshotRepository } from "src/worker/stores/effector-snapshots";
+import type {
+  EffectorSnapshotRepository,
+  UnknownHydratableStore,
+} from "src/worker/stores/effector-snapshots";
 import type { UltrafeedWriter } from "src/worker/ultrafeed-writer";
 
 export interface WorkerContext {
@@ -9,6 +13,8 @@ export interface WorkerContext {
   supabase: SupabaseClient;
   auth: SupabaseAuth;
   writer: UltrafeedWriter;
+  stores: UnknownHydratableStore[];
+  peerClient: PeerClient;
   validation: WorkerValidation;
   snapshots: EffectorSnapshotRepository;
   log: WorkerLogger;

@@ -1,7 +1,7 @@
 import { formatError } from "src/error-handling/error-format";
 import { RETRY_DELAY_MS } from "src/worker/constants";
 import type { WorkerContext } from "src/worker/context/types";
-import { runRealtimeSubscriptionRound } from "src/worker/realtime/realtime";
+import { runRealtimeSubscriptionRound } from "src/worker/realtime/realtime-round";
 import { sleepMs } from "src/worker/sleep";
 
 export async function runWorkerLoop(ctx: WorkerContext) {

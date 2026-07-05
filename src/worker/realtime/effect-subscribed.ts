@@ -1,9 +1,8 @@
-import { createEffect, scopeBind, type Scope } from "effector";
+import { allSettled, createEffect, type Scope } from "effector";
 import type { WorkerContext } from "src/worker/context/types";
 import { reconcileRequested } from "src/worker/events/store-events";
 import type { UltrafeedEvent } from "src/worker/feed/feed-events";
 import { feedEventReceived } from "src/worker/jira-artifact/jira-artifact-events";
-import { hydratableArtifactStore } from "src/worker/jira-artifact/jira-artifact-store";
 import type { RealtimeEventBuffer } from "src/worker/realtime/event-buffer";
 
 export interface SubscribedEventData {
@@ -14,7 +13,7 @@ export interface SubscribedEventData {
 
 export const effectSubscribed = createEffect(
   async ({ buffer, ctx, scope }: SubscribedEventData) => {
-    const stores = [hydratableArtifactStore];
+    const stores = ctx.stores;
 
     ctx.log.debug(
       "inited stores =",
@@ -31,12 +30,12 @@ export const effectSubscribed = createEffect(
 
     const processEvents = async (events: UltrafeedEvent[]) => {
       for (const event of events) {
-        scopeBind(feedEventReceived, { scope })(event);
+        await allSettled(feedEventReceived, { scope, params: event });
       }
     };
 
     const reconcileStores = async () => {
-      scopeBind(reconcileRequested, { scope })({ ctx });
+      await allSettled(reconcileRequested, { scope, params: { ctx, scope } });
     };
 
     // load events since the oldest cursor

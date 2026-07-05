@@ -1,14 +1,21 @@
 import { createClient } from "@supabase/supabase-js";
 import createDebug from "debug";
+import { createPeerClient } from "src/peer-protocol/peer-client";
 import { SupabaseAuth } from "src/worker/auth";
 import type { WorkerConfig } from "src/worker/config";
 import type { WorkerContext } from "src/worker/context/types";
 import { ResolvablePromise } from "src/worker/resolvable-promise";
+import {
+  EffectorSnapshotRepository,
+  type UnknownHydratableStore,
+} from "src/worker/stores/effector-snapshots";
 import { UltrafeedWriter } from "src/worker/ultrafeed-writer";
 import { runIssuePrompt, runIssueValidation } from "../commands/new";
-import { EffectorSnapshotRepository } from "src/worker/stores/effector-snapshots";
 
-export function createWorkerContext(workerConfig: WorkerConfig): WorkerContext {
+export function createWorkerContext(
+  workerConfig: WorkerConfig,
+  stores: UnknownHydratableStore[],
+): WorkerContext {
   const debug = createDebug("app:supabase-worker");
 
   const authPromise = ResolvablePromise.create<SupabaseAuth>();
@@ -43,11 +50,14 @@ export function createWorkerContext(workerConfig: WorkerConfig): WorkerContext {
   const snapshots = EffectorSnapshotRepository.create({
     directory: workerConfig.worker.snapshots.directory,
   });
+  const peerClient = createPeerClient();
 
   const ctx: WorkerContext = {
     workerConfig,
     writer,
+    peerClient,
     supabase,
+    stores,
     auth,
     snapshots,
     validation: {

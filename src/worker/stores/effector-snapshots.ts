@@ -25,7 +25,7 @@ export class EffectorSnapshotRepository {
     return new EffectorSnapshotRepository(opts.directory);
   }
 
-  async hydrateStores(scope: Scope, stores: HydratableStore<any>[]) {
+  async hydrateStores(scope: Scope, stores: UnknownHydratableStore[]) {
     const cursors: (EventCursor | null)[] = [];
 
     for (const store of stores) {
@@ -40,7 +40,7 @@ export class EffectorSnapshotRepository {
     return { earliestCursor: getEarliestCursor(cursors) };
   }
 
-  async persistStore(scope: Scope, store: HydratableStore<any>) {
+  async persistStore(scope: Scope, store: UnknownHydratableStore) {
     const state = store.getState(scope);
 
     if (state === undefined) {
@@ -62,7 +62,7 @@ export class EffectorSnapshotRepository {
   }
 
   private async readStoreSnapshot(
-    store: HydratableStore<any>,
+    store: UnknownHydratableStore,
   ): Promise<HydratedStoreState | null> {
     try {
       const raw = await fs.readFile(this.snapshotPath(store), "utf-8");
@@ -114,6 +114,14 @@ export abstract class HydratableStore<T> {
   abstract getName: () => string;
 
   static fromEffectorStore = hydratableStoreFromEffectorStore;
+}
+
+export type UnknownHydratableStore = HydratableStore<unknown>;
+
+export function asUnknown<T>(
+  store: HydratableStore<T>,
+): UnknownHydratableStore {
+  return store as UnknownHydratableStore;
 }
 
 function hydratableStoreFromEffectorStore<T>(

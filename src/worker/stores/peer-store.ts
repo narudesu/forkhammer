@@ -1,115 +1,170 @@
 import debug from "debug";
+import {
+  createEffect,
+  createEvent,
+  createStore,
+  sample,
+  scopeBind,
+  type Scope,
+} from "effector";
+import { produce } from "immer";
 import { handleOpencodeSessionCreate } from "src/peer-handlers/handle-opencode-session-create";
 import { handleOpencodeSessionPrompt } from "src/peer-handlers/handle-opencode-session-prompt";
 import { handleOpencodeStatus } from "src/peer-handlers/handle-opencode-status";
 import { handleWorktreeList } from "src/peer-handlers/handle-worktree-list";
-import type { PeerClient } from "src/peer-protocol/peer-client";
+import type { OpencodeAgent } from "src/peer-protocol/peer-protocol";
 import type { WorkerContext } from "src/worker/context/types";
+import { reconcileRequested } from "src/worker/events/store-events";
 import { parseUltrafeedEventData } from "src/worker/events";
-import type { UltrafeedEvent } from "src/worker/feed/feed-events";
-import type {
-  EventCursor,
-  StoreSnapshot,
-  WorkerStore,
-} from "src/worker/stores/types";
+import { feedEventReceived } from "src/worker/jira-artifact/jira-artifact-events";
+import { HydratableStore } from "src/worker/stores/effector-snapshots";
+import type { EventCursor } from "src/worker/stores/types";
+import { isAfterCurrentCursor } from "src/worker/stores/types";
 import z from "zod";
 
 const log = debug("app:peer");
 
-type PeerStoreState = {
+export type PeerStoreState = {
   activePeerId: string | null;
   pendingPeerId: string | null;
   sessionIssueKeys: Record<string, string>;
-  sessionAgents: Record<string, "plan" | "build">;
+  sessionAgents: Record<string, OpencodeAgent>;
+  cursor: EventCursor | null;
 };
 
-export function createPeerStore(
-  _ctx: WorkerContext,
-  client: PeerClient,
-): WorkerStore<PeerStoreState> {
-  const state: PeerStoreState = {
+export const $peerStore = createStore<PeerStoreState>(
+  {
     activePeerId: null,
     pendingPeerId: null,
     sessionIssueKeys: {},
     sessionAgents: {},
-  };
+    cursor: null,
+  },
+  { sid: "peer" },
+);
 
-  const sessionMetadata = {
-    issueKeys: state.sessionIssueKeys,
-    agents: state.sessionAgents,
-  };
-  const sessionMetadataStore = {
-    setIssueKey: (sessionId: string, issueKey: string) => {
-      state.sessionIssueKeys[sessionId] = issueKey;
-    },
-    setAgent: (sessionId: string, agent: "plan" | "build") => {
-      state.sessionAgents[sessionId] = agent;
-    },
-  };
+export const hydratablePeerStore =
+  HydratableStore.fromEffectorStore($peerStore);
 
-  client.register("worktree.list", (message) => {
-    handleWorktreeList(message, client.send);
-  });
-  client.register("opencode.status", (message) => {
-    handleOpencodeStatus(message, client.send, sessionMetadata);
-  });
-  client.register("opencode.session.create", (message) => {
-    handleOpencodeSessionCreate(message, client.send, sessionMetadataStore);
-  });
-  client.register("opencode.session.prompt", (message) => {
-    handleOpencodeSessionPrompt(message, client.send);
-  });
+const peerConnected = createEvent<string>();
+const peerSessionIssueKeySet = createEvent<{
+  sessionId: string;
+  issueKey: string;
+}>();
+const peerSessionAgentSet = createEvent<{
+  sessionId: string;
+  agent: OpencodeAgent;
+}>();
 
-  return {
-    name: "peer",
-    reduce(event: UltrafeedEvent, _cursor: EventCursor | null) {
-      const browserPeerReadyEvent = z
-        .object({
-          event_type: z.literal("browser_peer_ready"),
-          data: z.object({ peerId: z.string() }),
-        })
-        .safeParse(event).data;
+$peerStore.on(feedEventReceived, (state, action) =>
+  produce(state, (state) => {
+    if (!isAfterCurrentCursor(state.cursor, action)) {
+      return;
+    }
 
-      if (browserPeerReadyEvent) {
-        state.pendingPeerId = browserPeerReadyEvent.data.peerId;
-        return true;
+    const browserPeerReadyEvent = z
+      .object({
+        event_type: z.literal("browser_peer_ready"),
+        data: z.object({ peerId: z.string() }),
+      })
+      .safeParse(action).data;
+
+    if (browserPeerReadyEvent) {
+      state.cursor = { id: action.id, created_at: action.created_at };
+      state.pendingPeerId = browserPeerReadyEvent.data.peerId;
+      return;
+    }
+
+    if (action.event_type === "validate_issue_started") {
+      const parsed = parseUltrafeedEventData(
+        action.event_type,
+        action.data,
+      ) as { session_id: string; issue_key: string } | null;
+
+      if (parsed) {
+        state.cursor = { id: action.id, created_at: action.created_at };
+        state.sessionIssueKeys[parsed.session_id] = parsed.issue_key;
       }
-      if (event.event_type === "validate_issue_started") {
-        const parsed = parseUltrafeedEventData(
-          event.event_type,
-          event.data,
-        ) as { session_id: string; issue_key: string } | null;
+    }
+  }),
+);
 
-        if (parsed) {
-          state.sessionIssueKeys[parsed.session_id] = parsed.issue_key;
-          return true;
-        }
-      }
-      return false;
-    },
-    async reconcile() {
-      const peerId = state.pendingPeerId;
-      if (!peerId || peerId === state.activePeerId) {
-        return false;
-      }
+$peerStore.on(peerConnected, (state, peerId) =>
+  produce(state, (state) => {
+    state.activePeerId = peerId;
+  }),
+);
 
-      log("connecting to new peer", { peerId });
-      client.connect(peerId);
-      state.activePeerId = peerId;
+$peerStore.on(peerSessionIssueKeySet, (state, action) =>
+  produce(state, (state) => {
+    state.sessionIssueKeys[action.sessionId] = action.issueKey;
+  }),
+);
 
-      return false;
-    },
-    hydrate(_snapshot: StoreSnapshot<PeerStoreState> | null) {},
-    snapshot() {
-      return {
-        version: 1 as const,
-        reducedEventsSinceSnapshot: 0,
-        state,
-      };
-    },
-    needsSnapshot() {
-      return false;
-    },
-    markSnapshotPersisted() {},
-  };
-}
+$peerStore.on(peerSessionAgentSet, (state, action) =>
+  produce(state, (state) => {
+    state.sessionAgents[action.sessionId] = action.agent;
+  }),
+);
+
+const effectRegisterPeerHandlers = createEffect(
+  async ({ ctx, scope }: { ctx: WorkerContext; scope: Scope }) => {
+    const client = ctx.peerClient;
+    const setIssueKey = scopeBind(peerSessionIssueKeySet, { scope });
+    const setAgent = scopeBind(peerSessionAgentSet, { scope });
+    const sessionMetadataStore = {
+      setIssueKey: (sessionId: string, issueKey: string) => {
+        setIssueKey({ sessionId, issueKey });
+      },
+      setAgent: (sessionId: string, agent: OpencodeAgent) => {
+        setAgent({ sessionId, agent });
+      },
+    };
+
+    client.register("worktree.list", (message) => {
+      handleWorktreeList(message, client.send);
+    });
+    client.register("opencode.status", (message) => {
+      const state = scope.getState($peerStore);
+      handleOpencodeStatus(message, client.send, {
+        issueKeys: state.sessionIssueKeys,
+        agents: state.sessionAgents,
+      });
+    });
+    client.register("opencode.session.create", (message) => {
+      handleOpencodeSessionCreate(message, client.send, sessionMetadataStore);
+    });
+    client.register("opencode.session.prompt", (message) => {
+      handleOpencodeSessionPrompt(message, client.send);
+    });
+  },
+);
+
+const effectConnectPeer = createEffect(
+  async ({ ctx, peerId }: { ctx: WorkerContext; peerId: string }) => {
+    log("connecting to new peer", { peerId });
+    ctx.peerClient.connect(peerId);
+    return peerId;
+  },
+);
+
+sample({
+  clock: reconcileRequested,
+  filter: (action) => !!action.scope,
+  fn: ({ ctx, scope }) => ({ ctx, scope: scope as Scope }),
+  target: effectRegisterPeerHandlers,
+});
+
+sample({
+  clock: reconcileRequested,
+  source: $peerStore,
+  filter: (state) =>
+    !!state.pendingPeerId && state.pendingPeerId !== state.activePeerId,
+  fn: (state, { ctx }) => ({ ctx, peerId: state.pendingPeerId as string }),
+  target: effectConnectPeer,
+});
+
+sample({
+  clock: effectConnectPeer.doneData,
+  target: peerConnected,
+});
