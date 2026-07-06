@@ -28,6 +28,36 @@ export const effectFetchArtifact = createEffect(
       },
     ]);
 
+    const { data: artifactEvents } = await ctx.supabase
+      .from(ctx.workerConfig.supabase.table)
+      .select("data")
+      .eq("event_type", "inserted_artifact")
+      .eq("data->>artifactType", "jira_inbox");
+
+    const oldArtifactIds = (artifactEvents ?? [])
+      .map((event) => getArtifactId(event.data))
+      .filter((artifactId) => artifactId !== null && artifactId !== id);
+
+    if (oldArtifactIds.length > 0) {
+      await ctx.supabase
+        .from("jira_artifacts")
+        .delete()
+        .in("id", oldArtifactIds);
+    }
+
     ctx.log.debug(`published Jira inbox snapshot`);
   },
 );
+
+function getArtifactId(data: unknown): string | null {
+  if (
+    typeof data === "object" &&
+    data !== null &&
+    "artifactId" in data &&
+    typeof data.artifactId === "string"
+  ) {
+    return data.artifactId;
+  }
+
+  return null;
+}

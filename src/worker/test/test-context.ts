@@ -1,4 +1,3 @@
-import test from "node:test";
 import type { Config } from "src/config/config";
 import { JiraClient } from "src/jira/jira";
 import type { WorkerContext } from "src/worker/context/types";
@@ -6,21 +5,21 @@ import {
   TestJiraClient,
   type CreateTestJiraClientOptions,
 } from "src/worker/test/test-jira-client";
+import {
+  type CreateTestSupabaseClientOptions,
+  TestSupabaseClient,
+} from "src/worker/test/test-supabase-client";
 
 interface CreateTextContextOptions {
   empty?: true;
   jira?: CreateTestJiraClientOptions;
-}
-
-interface TableInsert {
-  table: string;
-  rows: unknown[];
+  supabase?: CreateTestSupabaseClientOptions;
 }
 
 export abstract class TestWorkerContext {
   abstract getContext: () => WorkerContext;
-  abstract getInserts: () => TableInsert[];
   abstract testJiraClient: () => TestJiraClient;
+  abstract testSupabaseClient: () => TestSupabaseClient;
 
   static create = createTestContext;
 }
@@ -28,8 +27,6 @@ export abstract class TestWorkerContext {
 export function createTestContext(
   options: CreateTextContextOptions,
 ): TestWorkerContext {
-  const inserts: TableInsert[] = [];
-
   const jiraConfig: NonNullable<Config["jira"]> = {
     url: "https://example.atlassian.net",
     auth: "user:token",
@@ -42,6 +39,7 @@ export function createTestContext(
   const testJiraClient = options.jira
     ? TestJiraClient.createMocked(options.jira)
     : null;
+  const testSupabaseClient = TestSupabaseClient.createMocked(options.supabase);
   const jira = testJiraClient?.getJiraClient() ?? JiraClient.create(jiraConfig);
 
   const workerContext: WorkerContext = {
@@ -64,14 +62,7 @@ export function createTestContext(
         },
       },
     },
-    supabase: {
-      from: (table: string) => ({
-        insert: async (rows: unknown[]) => {
-          inserts.push({ table, rows });
-          return { data: rows, error: null };
-        },
-      }),
-    } as unknown as WorkerContext["supabase"],
+    supabase: testSupabaseClient.getSupabaseClient(),
     auth: {
       activeTokenOrFail: () => ({
         getUserId: () => "user-1",
@@ -96,7 +87,7 @@ export function createTestContext(
       }
       throw new Error("test-jira-client-not-configured");
     },
+    testSupabaseClient: () => testSupabaseClient,
     getContext: () => workerContext,
-    getInserts: () => inserts,
   };
 }

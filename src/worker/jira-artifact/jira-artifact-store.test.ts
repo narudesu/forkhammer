@@ -27,6 +27,7 @@ describe("jira artifact store", () => {
       },
     });
     const ctx = testContext.getContext();
+    const supabase = testContext.testSupabaseClient();
 
     const initialState: JiraArtifactStoreState = {
       isRefetchRequested: false,
@@ -46,7 +47,7 @@ describe("jira artifact store", () => {
       params: { ctx, scope },
     });
 
-    const inserts = testContext.getInserts();
+    const inserts = supabase.getInserts();
     expect(inserts).toHaveLength(2);
 
     const artifactInsert = inserts.find(
@@ -87,6 +88,87 @@ describe("jira artifact store", () => {
         created_at: artifactRefreshRequestedEvent.created_at,
       },
     });
+  });
+
+  test("deletes old Jira inbox artifacts after inserting a new one", async () => {
+    const scope = fork();
+    const testContext = TestWorkerContext.create({
+      jira: {
+        fakeIssues,
+      },
+      supabase: {
+        rows: {
+          events: [
+            {
+              event_type: "inserted_artifact",
+              data: {
+                artifactType: "jira_inbox",
+                artifactId: "old-jira-inbox-artifact",
+              },
+            },
+            {
+              event_type: "inserted_artifact",
+              data: {
+                artifactType: "other_artifact",
+                artifactId: "other-artifact",
+              },
+            },
+            {
+              event_type: "validate_issue_requested",
+              data: {
+                artifactType: "jira_inbox",
+                artifactId: "wrong-event-type-artifact",
+              },
+            },
+            {
+              event_type: "inserted_artifact",
+              data: {
+                artifactType: "jira_inbox",
+              },
+            },
+          ],
+        },
+      },
+    });
+    const ctx = testContext.getContext();
+    const supabase = testContext.testSupabaseClient();
+
+    await allSettled(hydratableArtifactStore.hydrationRequested, {
+      scope,
+      params: {
+        isRefetchRequested: false,
+        cursor: null,
+      } satisfies JiraArtifactStoreState,
+    });
+    await allSettled(feedEventReceived, {
+      scope,
+      params: artifactRefreshRequestedEvent,
+    });
+    await allSettled(reconcileRequested, {
+      scope,
+      params: { ctx, scope },
+    });
+
+    const artifactInsert = supabase
+      .getInserts()
+      .find((insert) => insert.table === "jira_artifacts");
+    const artifactRow = artifactInsert?.rows[0] as { id: string };
+
+    expect(supabase.getDeletes()).toEqual([
+      {
+        table: "jira_artifacts",
+        filters: [
+          {
+            type: "in",
+            column: "id",
+            value: ["old-jira-inbox-artifact"],
+          },
+        ],
+      },
+    ]);
+    expect(supabase.getDeletes()[0]?.filters[0]?.value).not.toContain(
+      artifactRow.id,
+    );
   });
 });
 
