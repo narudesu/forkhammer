@@ -1,0 +1,3 @@
+
+[test]
+preload = ["./src/worker/test/test-setup.ts"]

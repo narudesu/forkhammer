@@ -8,10 +8,10 @@
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
-    "types": ["node"],
+    "types": ["node", "bun"],
     "paths": {
       "src/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "src/global.d.ts"]
 }

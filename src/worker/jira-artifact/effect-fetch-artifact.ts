@@ -1,25 +1,13 @@
 import { createEffect } from "effector";
-import { getJiraInboxIssues } from "src/jira/jira";
 import type { WorkerContext } from "src/worker/context/types";
 
 export const effectFetchArtifact = createEffect(
   async (opts: { ctx: WorkerContext }) => {
     const { ctx } = opts;
-    const jiraConfig = ctx.workerConfig.jira;
 
     ctx.log.debug("effect fetch artifact");
-
-    if (jiraConfig == null) {
-      throw new Error("jira-config-not-defined");
-    }
-
-    const filterId = jiraConfig.filters?.inbox?.filter_id;
-    if (filterId == null) {
-      throw new Error("filter-not-defined");
-    }
-
     const userId = ctx.auth.activeTokenOrFail().getUserId();
-    const issues = await getJiraInboxIssues(jiraConfig);
+    const issues = await ctx.jira.getJiraInboxIssues();
 
     const id = crypto.randomUUID();
     await ctx.supabase.from("jira_artifacts").insert([

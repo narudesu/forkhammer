@@ -5,8 +5,8 @@ import { effectFetchArtifact } from "src/worker/jira-artifact/effect-fetch-artif
 import { feedEventReceived } from "src/worker/jira-artifact/jira-artifact-events";
 import { HydratableStore } from "src/worker/snapshot/effector-snapshots";
 import {
-  isAfterCurrentCursor,
   type EventCursor,
+  isAfterCurrentCursor,
 } from "src/worker/stores/types";
 
 export interface JiraArtifactStoreState {

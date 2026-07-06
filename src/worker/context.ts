@@ -11,6 +11,7 @@ import {
 } from "src/worker/snapshot/effector-snapshots";
 import { UltrafeedWriter } from "src/worker/ultrafeed-writer";
 import { runIssuePrompt, runIssueValidation } from "../commands/new";
+import { JiraClient } from "src/jira/jira";
 
 export function createWorkerContext(
   workerConfig: WorkerConfig,
@@ -52,9 +53,12 @@ export function createWorkerContext(
   });
   const peerClient = createPeerClient();
 
+  const jira = JiraClient.create(workerConfig.jira);
+
   const ctx: WorkerContext = {
     workerConfig,
     writer,
+    jira,
     peerClient,
     supabase,
     stores,

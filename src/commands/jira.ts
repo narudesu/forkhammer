@@ -1,7 +1,8 @@
 import chalk from "chalk";
 import type { Config } from "../config/config";
 import { loadConfig } from "../config/config";
-import { getJiraInboxIssues, type JiraInboxIssue } from "../jira/jira";
+import { JiraClient } from "src/jira/jira";
+import type { JiraInboxIssue } from "src/jira/jira-types";
 
 type RunJiraInboxOptions = {
   loadConfig?: () => Promise<Config>;
@@ -17,16 +18,9 @@ export async function runJiraInbox(options: RunJiraInboxOptions = {}) {
   if (!jiraConfig) {
     throw new Error("jira-config-not-found");
   }
+  const client = JiraClient.create(jiraConfig);
 
-  const filterId = jiraConfig.filters?.inbox?.filter_id;
-  if (!filterId) {
-    (options.warn ?? console.warn)(
-      "No jira.filters.inbox.filter_id configured; nothing to fetch.",
-    );
-    return;
-  }
-
-  const issues = await getJiraInboxIssues(jiraConfig);
+  const issues = await client.getJiraInboxIssues();
 
   const print = options.print ?? console.log;
   if (!issues.length) {

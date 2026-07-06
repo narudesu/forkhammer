@@ -1,125 +1,74 @@
 import toml from "smol-toml";
-import z from "zod";
+import type z from "zod";
 import type { Config } from "../config/config";
+import {
+  type JiraInboxIssue,
+  zJiraInboxSearchResponse,
+  type IssueContext,
+  zJiraIssue,
+  type zJiraInboxIssue,
+} from "src/jira/jira-types";
 
-const zJiraComment = z.object({
-  author: z.object({ displayName: z.string() }),
-  body: z.unknown(),
-  created: z.string(),
-});
+export abstract class JiraClient {
+  abstract getJiraInboxIssues(): Promise<JiraInboxIssue[]>;
 
-const zJiraIssue = z.object({
-  fields: z.object({
-    status: z.object({ name: z.string() }),
-    summary: z.string(),
-    description: z.unknown().optional(),
-    creator: z.object({ displayName: z.string() }),
-    comment: z
-      .object({
-        comments: z.array(zJiraComment),
-      })
-      .optional()
-      .default({ comments: [] }),
-  }),
-});
+  static create = createClient;
+}
 
-const zJiraInboxIssue = z.object({
-  key: z.string(),
-  fields: z.object({
-    status: z.object({ name: z.string() }),
-    summary: z.string(),
-    priority: z.object({ name: z.string() }).nullable().optional(),
-    labels: z.array(z.string()).optional().default([]),
-    description: z.unknown().optional(),
-    assignee: z.object({ displayName: z.string() }).nullable().optional(),
-    reporter: z.object({ displayName: z.string() }).nullable().optional(),
-  }),
-});
+function createClient(config: NonNullable<Config["jira"]>): JiraClient {
+  return {
+    async getJiraInboxIssues() {
+      const filterId = config.filters?.inbox?.filter_id;
+      if (!filterId) {
+        return [];
+      }
 
-const zJiraInboxSearchResponse = z.object({
-  isLast: z.boolean().optional(),
-  nextPageToken: z.string().optional(),
-  issues: z.array(zJiraInboxIssue),
-});
+      const issues: Array<JiraInboxIssue> = [];
+      let nextPageToken: string | null = null;
+      const maxResults = 100;
 
-export type JiraInboxIssue = {
-  key: string;
-  summary: string;
-  status: string;
-  priority: string;
-  labels?: Array<string>;
-  description?: string;
-  assignee?: string;
-  reporter?: string;
-};
+      while (true) {
+        const url = new URL(config.url);
+        url.pathname = "/rest/api/3/search/jql";
+        url.searchParams.set("jql", `filter=${filterId}`);
+        url.searchParams.set("maxResults", String(maxResults));
+        if (nextPageToken) {
+          url.searchParams.set("nextPageToken", nextPageToken);
+        }
+        url.searchParams.set(
+          "fields",
+          "summary,status,priority,labels,description,assignee,reporter",
+        );
 
-export type IssueContext = {
-  key: string;
-  summary: string;
-  creator: string;
-  status: string;
-  description: string;
-  comments: Array<IssueComment>;
-};
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            Authorization: `Basic ${Buffer.from(config.auth).toString("base64")}`,
+            "Content-Type": "application/json",
+          },
+        });
+        const text = await response.text();
 
-export type IssueComment = {
-  author: string;
-  body: string;
-  createdAt: string;
-};
+        if (!response.ok) {
+          throw new Error(`jira-request-failed:${response.status}:${text}`);
+        }
 
-export async function getJiraInboxIssues(
-  config: NonNullable<Config["jira"]>,
-): Promise<Array<JiraInboxIssue>> {
-  const filterId = config.filters?.inbox?.filter_id;
-  if (!filterId) {
-    return [];
-  }
+        const parsed = zJiraInboxSearchResponse.parse(JSON.parse(text));
+        issues.push(...parsed.issues.map(normalizeJiraInboxIssue));
 
-  const issues: Array<JiraInboxIssue> = [];
-  let nextPageToken: string | null = null;
-  const maxResults = 100;
+        nextPageToken = parsed.nextPageToken ?? null;
+        if (
+          parsed.isLast === true ||
+          !nextPageToken ||
+          parsed.issues.length === 0
+        ) {
+          break;
+        }
+      }
 
-  while (true) {
-    const url = new URL(config.url);
-    url.pathname = "/rest/api/3/search/jql";
-    url.searchParams.set("jql", `filter=${filterId}`);
-    url.searchParams.set("maxResults", String(maxResults));
-    if (nextPageToken) {
-      url.searchParams.set("nextPageToken", nextPageToken);
-    }
-    url.searchParams.set(
-      "fields",
-      "summary,status,priority,labels,description,assignee,reporter",
-    );
-
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        Authorization: `Basic ${Buffer.from(config.auth).toString("base64")}`,
-        "Content-Type": "application/json",
-      },
-    });
-    const text = await response.text();
-
-    if (!response.ok) {
-      throw new Error(`jira-request-failed:${response.status}:${text}`);
-    }
-
-    const parsed = zJiraInboxSearchResponse.parse(JSON.parse(text));
-    issues.push(...parsed.issues.map(normalizeJiraInboxIssue));
-
-    nextPageToken = parsed.nextPageToken ?? null;
-    if (
-      parsed.isLast === true ||
-      !nextPageToken ||
-      parsed.issues.length === 0
-    ) {
-      break;
-    }
-  }
-
-  return issues;
+      return issues;
+    },
+  };
 }
 
 export async function getIssueContext(
