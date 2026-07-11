@@ -6,7 +6,7 @@ services:
       args:
         ALPINE_VERSION: "3.20"
         BUN_VERSION: "1.3.14"
-        OPENCODE_REF: "forkhammer-v2"
+        OPENCODE_REF: "forkhammer-v5"
         OPENCODE_USER: ${USER}
     container_name: forkhammer
     restart: unless-stopped

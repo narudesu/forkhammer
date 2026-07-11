@@ -1,11 +1,13 @@
 import {
   createDefaultOpencodeClient,
+  OpencodeGateway,
   unwrapOpencodeData,
 } from "src/opencode/opencode";
 import type {
   OpencodeAgent,
   PeerMessage,
 } from "src/peer-protocol/peer-protocol";
+import { runBlock } from "src/worker/run-block";
 
 export type OpencodeSessionMetadataStore = {
   setIssueKey: (sessionId: string, issueKey: string) => void;
@@ -22,6 +24,23 @@ export async function handleOpencodeSessionCreate(
   }
 
   try {
+    runBlock(async () => {
+      const gateway = OpencodeGateway.createDefault();
+      const sandbox = await gateway.sandbox({
+        projectId: msg.projectId,
+        sandboxName: msg.sandboxName,
+      });
+      const sessionTitle = msg.issueKey
+        ? `${msg.issueKey} - Workbench`
+        : "Workbench";
+
+      const session = await sandbox.createSession({
+        title: sessionTitle,
+      });
+
+      await session.agent().text("");
+    });
+
     const client = createDefaultOpencodeClient();
     const projects = await client.project.list().then(unwrapOpencodeData);
     const project = projects.find(
