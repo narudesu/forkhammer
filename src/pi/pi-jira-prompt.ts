@@ -9,6 +9,8 @@ export class PiJiraPrompt {
   }
 }
 
+const isTestPromptMode = process.env.FORKHAMMER_TEST_MODE === "true";
+
 function buildValidationPrompt(context: string) {
   return `
 ### Instructions
@@ -18,9 +20,11 @@ function buildValidationPrompt(context: string) {
 - You must submit exactly one complete response through the submit_implementation_plan tool before finishing.
 - Do not only describe the plan in chat; the submitted tool payload is the validation result.
 
-IMPORTANT: we are just testing now, so do not read any files, just call the tool with some plausible texts based on the jira context
+${isTestPromptMode ? testPromptExtra : ""}
 
 ### Jira Context
 
 ${context}`;
 }
+const testPromptExtra =
+  "IMPORTANT: we are just testing now, so do not read any files, just call the tool with some plausible texts based on the jira context";

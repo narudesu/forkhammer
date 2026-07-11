@@ -3,10 +3,14 @@ import {
   createEffect,
   createEvent,
   createStore,
-  type Scope,
   sample,
+  type Scope,
 } from "effector";
 import { produce } from "immer";
+import {
+  createPeerResolverTarget,
+  PeerResolver,
+} from "src/peer-protocol/peer-resolver";
 import type { WorkerContext } from "src/worker/context/types";
 import { parseUltrafeedEventData } from "src/worker/events";
 import { reconcileRequested } from "src/worker/events/store-events";
@@ -111,9 +115,7 @@ $peerRuntimeStore.on(peerSessionAgentSet, (state, action) =>
 
 const effectRegisterPeerHandlers = createEffect(
   async ({ ctx }: { ctx: WorkerContext; scope: Scope }) => {
-    const client = ctx.peerClient;
-
-    client.register("noop", () => {});
+    PeerResolver.register(ctx, createPeerResolverTarget(ctx));
   },
 );
 

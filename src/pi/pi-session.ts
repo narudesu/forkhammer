@@ -3,12 +3,10 @@ import {
   type AgentSession,
   createAgentSession,
   DefaultResourceLoader,
-  getAgentDir,
 } from "@earendil-works/pi-coding-agent";
-import path from "node:path";
 import type { Config } from "src/config/config";
+import { resolvePiAgentDir } from "src/pi/pi-agent-dir";
 import type { SubmitImplementationPlanTool } from "src/pi/tools/submit-implementation-plan-tool";
-import { runBlock } from "src/worker/run-block";
 
 export abstract class PiSessionGateway {
   abstract session: AgentSession;
@@ -20,13 +18,7 @@ export abstract class PiSessionGateway {
   }): Promise<PiSessionGateway> {
     const cwd = opts.directory;
 
-    const agentDir = runBlock(() => {
-      const envDir = process.env.FORKHAMMER_STATE_DIR;
-      if (envDir) {
-        return path.resolve(envDir, "pi-agent");
-      }
-      return getAgentDir();
-    });
+    const agentDir = resolvePiAgentDir();
 
     const resourceLoader = new DefaultResourceLoader({
       cwd,

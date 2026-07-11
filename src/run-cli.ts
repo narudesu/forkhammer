@@ -1,6 +1,12 @@
 import { Command } from "commander";
 import { runJiraInbox } from "./cli-commands/run-jira-inbox";
 import {
+  runPeerGetConfig,
+  runPeerGetSession,
+  runPeerListSessions,
+  runPeerListWorktrees,
+} from "./cli-commands/run-peer-commands";
+import {
   runQueueAdd,
   runQueueList,
   runQueueRead,
@@ -25,6 +31,29 @@ async function runCli() {
     .description("Inspect the Supabase event queue");
 
   const jira = program.command("jira").description("Inspect Jira data");
+  const peer = program
+    .command("peer")
+    .description("Inspect worker state through the PeerResolver API");
+
+  peer
+    .command("get-config")
+    .description("Show the public project configuration")
+    .action(runPeerGetConfig);
+
+  peer
+    .command("list-worktrees <project>")
+    .description("List Git worktrees for a project")
+    .action(runPeerListWorktrees);
+
+  peer
+    .command("list-sessions <project> <worktree-path>")
+    .description("List PI sessions for a worktree")
+    .action(runPeerListSessions);
+
+  peer
+    .command("get-session <session-path>")
+    .description("Display messages from a PI session")
+    .action(runPeerGetSession);
 
   jira
     .command("inbox")
