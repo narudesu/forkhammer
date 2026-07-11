@@ -49,6 +49,55 @@ export async function runPeerListSessions(
   }
 }
 
+export async function runPeerCreateWorktree(
+  project: string,
+  name: string,
+): Promise<void> {
+  const result = await (await loadPeerTarget()).createWorktree({
+    project,
+    name,
+  });
+  console.log(chalk.green(`Created worktree: ${result.path}`));
+}
+
+export async function runPeerCreateSession(
+  worktreePath: string,
+): Promise<void> {
+  const result = await (await loadPeerTarget()).createSession({ worktreePath });
+  console.log(chalk.green(`Created session: ${result.path}`));
+}
+
+export async function runPeerArchiveSession(
+  sessionPath: string,
+): Promise<void> {
+  await (await loadPeerTarget()).archiveSession({ sessionPath });
+  console.log(chalk.green(`Archived session: ${sessionPath}`));
+}
+
+export async function runPeerPromptSession(
+  sessionPath: string,
+  prompt: string,
+): Promise<void> {
+  await (await loadPeerTarget()).promptSession({ sessionPath, prompt });
+  console.log(chalk.green(`Prompt completed: ${sessionPath}`));
+}
+
+export async function runPeerSubscribeSession(
+  sessionPath: string,
+): Promise<void> {
+  const target = await loadPeerTarget();
+  await target.subscribeSession({ sessionPath }, (event) => {
+    console.log(JSON.stringify(event));
+  });
+  await new Promise<void>((resolve) => {
+    const stop = () => {
+      void target.unsubscribeSession({ sessionPath }).finally(resolve);
+    };
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+  });
+}
+
 export async function runPeerGetSession(sessionPath: string): Promise<void> {
   const result = await (await loadPeerTarget()).getSession({ sessionPath });
   console.log(chalk.green(`Session: ${result.id ?? sessionPath}`));

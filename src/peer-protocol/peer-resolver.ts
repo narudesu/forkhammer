@@ -1,4 +1,8 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
+import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import { execa } from "execa";
 import type {
   GetConfigResult,
@@ -9,8 +13,10 @@ import type {
   ListWorktreesResult,
   PeerResolverTarget,
   Project,
+  SessionEvent,
 } from "src/peer-protocol/peer-protocol";
 import { resolvePiSessionDir } from "src/pi/pi-agent-dir";
+import { PiSessionGateway } from "src/pi/pi-session";
 import type { WorkerContext } from "src/worker/context/types";
 
 export type { PeerResolverTarget } from "src/peer-protocol/peer-protocol";
@@ -24,7 +30,33 @@ export abstract class PeerResolver {
 export function createPeerResolverTarget(
   context: WorkerContext,
 ): PeerResolverTarget {
+  const subscriptions = new Map<
+    string,
+    {
+      unsubscribe: () => void;
+      session: Awaited<ReturnType<typeof PiSessionGateway.create>>["session"];
+    }
+  >();
+
+  async function unsubscribeSession(sessionPath: string): Promise<boolean> {
+    const subscription = subscriptions.get(sessionPath);
+    if (!subscription) return false;
+    subscription.unsubscribe();
+    subscription.session.dispose();
+    subscriptions.delete(sessionPath);
+    return true;
+  }
+
+  function dispose(): void {
+    for (const subscription of subscriptions.values()) {
+      subscription.unsubscribe();
+      subscription.session.dispose();
+    }
+    subscriptions.clear();
+  }
+
   return {
+    dispose,
     async getConfig(): Promise<GetConfigResult> {
       const projects: Project[] = Object.entries(
         context.workerConfig.project,
@@ -84,7 +116,174 @@ export function createPeerResolverTarget(
         messages: manager.getEntries() as GetSessionResult["messages"],
       };
     },
+
+    async createWorktree(params) {
+      const project = getProject(context, params.project);
+      const gitRoot = (
+        await execa("git", ["-C", project.root, "rev-parse", "--show-toplevel"])
+      ).stdout.trim();
+      const worktreePath = path.resolve(
+        process.env.XDG_DATA_HOME ?? path.join(os.homedir(), ".local/share"),
+        "trees",
+        params.project,
+        params.name,
+      );
+      const existing = await execa("git", [
+        "-C",
+        gitRoot,
+        "worktree",
+        "list",
+        "--porcelain",
+      ]);
+      if (existing.stdout.includes(`worktree ${worktreePath}\n`)) {
+        throw new Error(`worktree-exists:${worktreePath}`);
+      }
+      const branchExists = await execa(
+        "git",
+        [
+          "-C",
+          gitRoot,
+          "show-ref",
+          "--verify",
+          "--quiet",
+          `refs/heads/${params.name}`,
+        ],
+        { reject: false },
+      );
+      if (branchExists.exitCode === 0) {
+        throw new Error(`worktree-branch-exists:${params.name}`);
+      }
+      await fs.mkdir(path.dirname(worktreePath), { recursive: true });
+      await execa("git", [
+        "-C",
+        gitRoot,
+        "worktree",
+        "add",
+        "-b",
+        params.name,
+        worktreePath,
+      ]);
+      return {
+        project: params.project,
+        name: params.name,
+        path: worktreePath,
+        branch: params.name,
+      };
+    },
+
+    async createSession(params) {
+      const manager = SessionManager.create(
+        params.worktreePath,
+        resolvePiSessionDir(params.worktreePath),
+      );
+      const sessionPath = manager.getSessionFile();
+      if (!sessionPath) throw new Error("session-file-not-created");
+      return {
+        path: sessionPath,
+        id: manager.getSessionId(),
+        cwd: params.worktreePath,
+      };
+    },
+
+    async subscribeSession(params, onEvent) {
+      await unsubscribeSession(params.sessionPath);
+      const manager = SessionManager.open(params.sessionPath);
+      const session = (
+        await PiSessionGateway.create({
+          directory: manager.getCwd(),
+          agentConfig: context.workerConfig.agent,
+          sessionManager: manager,
+        })
+      ).session;
+      const unsubscribe = session.subscribe((event) => {
+        const mapped = mapSessionEvent(params.sessionPath, event);
+        if (mapped) onEvent?.(mapped);
+      });
+      subscriptions.set(params.sessionPath, { unsubscribe, session });
+      return { sessionPath: params.sessionPath, subscribed: true };
+    },
+
+    async unsubscribeSession(params) {
+      return {
+        sessionPath: params.sessionPath,
+        unsubscribed: await unsubscribeSession(params.sessionPath),
+      };
+    },
+
+    async archiveSession(params) {
+      await unsubscribeSession(params.sessionPath);
+      await fs.rm(params.sessionPath);
+      return { sessionPath: params.sessionPath, archived: true };
+    },
+
+    async promptSession(params) {
+      let subscription = subscriptions.get(params.sessionPath);
+      let ownedSession = false;
+      if (!subscription) {
+        const manager = SessionManager.open(params.sessionPath);
+        const session = (
+          await PiSessionGateway.create({
+            directory: manager.getCwd(),
+            agentConfig: context.workerConfig.agent,
+            sessionManager: manager,
+          })
+        ).session;
+        subscription = { unsubscribe: () => {}, session };
+        ownedSession = true;
+      }
+      try {
+        await subscription.session.prompt(params.prompt);
+        return { sessionPath: params.sessionPath };
+      } finally {
+        if (ownedSession) subscription.session.dispose();
+      }
+    },
   };
+}
+
+function mapSessionEvent(
+  sessionPath: string,
+  event: AgentSessionEvent,
+): SessionEvent | undefined {
+  if (event.type === "message_end") {
+    const message = (event as { message?: unknown }).message;
+    if (!message || typeof message !== "object") return undefined;
+    const record = message as { role?: unknown; content?: unknown };
+    const role =
+      record.role === "user"
+        ? "user_message"
+        : record.role === "assistant"
+          ? "assistant_message"
+          : undefined;
+    if (!role) return undefined;
+    return { sessionPath, type: role, text: extractText(record.content) };
+  }
+  if (event.type === "tool_execution_start") {
+    const record = event as { toolName?: unknown; toolCallId?: unknown };
+    return {
+      sessionPath,
+      type: "tool_call",
+      toolName:
+        typeof record.toolName === "string" ? record.toolName : undefined,
+    };
+  }
+  return undefined;
+}
+
+function extractText(content: unknown): string | undefined {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return undefined;
+  const text = content
+    .filter(
+      (item): item is { type: "text"; text: string } =>
+        !!item &&
+        typeof item === "object" &&
+        (item as { type?: unknown }).type === "text" &&
+        typeof (item as { text?: unknown }).text === "string",
+    )
+    .map((item) => item.text)
+    .join("");
+  return text || undefined;
 }
 
 function getProject(context: WorkerContext, name: string) {

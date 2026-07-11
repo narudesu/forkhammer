@@ -1,10 +1,15 @@
 import { Command } from "commander";
 import { runJiraInbox } from "./cli-commands/run-jira-inbox";
 import {
+  runPeerArchiveSession,
+  runPeerCreateSession,
+  runPeerCreateWorktree,
   runPeerGetConfig,
   runPeerGetSession,
   runPeerListSessions,
   runPeerListWorktrees,
+  runPeerPromptSession,
+  runPeerSubscribeSession,
 } from "./cli-commands/run-peer-commands";
 import {
   runQueueAdd,
@@ -54,6 +59,31 @@ async function runCli() {
     .command("get-session <session-path>")
     .description("Display messages from a PI session")
     .action(runPeerGetSession);
+
+  peer
+    .command("create-worktree <project> <name>")
+    .description("Create a Git worktree for a configured project")
+    .action(runPeerCreateWorktree);
+
+  peer
+    .command("create-session <worktree-path>")
+    .description("Create a persistent PI session")
+    .action(runPeerCreateSession);
+
+  peer
+    .command("archive-session <session-path>")
+    .description("Delete a PI session file")
+    .action(runPeerArchiveSession);
+
+  peer
+    .command("prompt-session <session-path> <prompt>")
+    .description("Send a one-shot prompt to a PI session")
+    .action(runPeerPromptSession);
+
+  peer
+    .command("subscribe-session <session-path>")
+    .description("Stream summarized PI session events")
+    .action(runPeerSubscribeSession);
 
   jira
     .command("inbox")

@@ -2,6 +2,7 @@ import { getBuiltinModel } from "@earendil-works/pi-ai/providers/all";
 import {
   type AgentSession,
   createAgentSession,
+  type SessionManager,
   DefaultResourceLoader,
 } from "@earendil-works/pi-coding-agent";
 import type { Config } from "src/config/config";
@@ -15,6 +16,7 @@ export abstract class PiSessionGateway {
     directory: string;
     agentConfig?: Config["agent"];
     planTool?: SubmitImplementationPlanTool;
+    sessionManager?: SessionManager;
   }): Promise<PiSessionGateway> {
     const cwd = opts.directory;
 
@@ -29,13 +31,14 @@ export abstract class PiSessionGateway {
     await resourceLoader.reload();
 
     const { session } = await createAgentSession({
-      thinkingLevel: "off",
+      thinkingLevel: "medium",
       tools: ["read", "grep", "find", "ls", opts?.planTool?.toolName].filter(
         (item) => item != null,
       ),
       agentDir,
       cwd,
       resourceLoader,
+      sessionManager: opts.sessionManager,
       model: getBuiltinModel(
         // @ts-expect-error
         opts.agentConfig?.default_provider_id ?? "openai-codex",

@@ -15,6 +15,7 @@ export interface PeerClient {
   disconnect(): void;
   request<T = unknown>(method: string, params?: unknown): Promise<T>;
   registerTarget(target: PeerResolverTarget): void;
+  onSessionEvent(handler: (event: unknown) => void): void;
   onDisconnect(handler: () => void): void;
 }
 
@@ -27,9 +28,11 @@ export function createPeerClient(options?: {
   const createPeer = options?.createPeer ?? createPeerInstance;
   let activeConnection: DataConnection | null = null;
   const disconnectHandlers: Array<() => void> = [];
+  const sessionEventHandlers: Array<(event: unknown) => void> = [];
   let pendingPeerId: string | null = null;
   let rpcClient: JSONRPCClient<void> | null = null;
   const rpcServer = new JSONRPCServer();
+  let registeredTarget: PeerResolverTarget | null = null;
 
   bindPeerEvents();
 
@@ -76,6 +79,7 @@ export function createPeerClient(options?: {
     conn.on("close", () => {
       if (activeConnection !== conn) return;
       activeConnection = null;
+      registeredTarget?.dispose();
       rpcClient?.rejectAllPendingRequests("peer disconnected");
       for (const handler of disconnectHandlers) handler();
     });
@@ -85,6 +89,10 @@ export function createPeerClient(options?: {
     if (!isJsonRpcPayload(payload)) return;
     const item = Array.isArray(payload) ? payload[0] : payload;
     if (item && "method" in item) {
+      if (item.method === PeerResolverMethod.sessionEvent) {
+        for (const handler of sessionEventHandlers) handler(item.params);
+        return;
+      }
       const response = await rpcServer.receive(payload as never);
       if (response != null) send(response);
       return;
@@ -112,6 +120,7 @@ export function createPeerClient(options?: {
 
   function disconnect(): void {
     activeConnection?.close();
+    registeredTarget?.dispose();
     activeConnection = null;
     rpcClient?.rejectAllPendingRequests("peer disconnected");
   }
@@ -132,6 +141,7 @@ export function createPeerClient(options?: {
   }
 
   function registerTarget(target: PeerResolverTarget): void {
+    registeredTarget = target;
     rpcServer.addMethod(PeerResolverMethod.getConfig, () => target.getConfig());
     rpcServer.addMethod(PeerResolverMethod.listWorktrees, (params) =>
       target.listWorktrees(params as never),
@@ -142,13 +152,48 @@ export function createPeerClient(options?: {
     rpcServer.addMethod(PeerResolverMethod.getSession, (params) =>
       target.getSession(params as never),
     );
+    rpcServer.addMethod(PeerResolverMethod.createWorktree, (params) =>
+      target.createWorktree(params as never),
+    );
+    rpcServer.addMethod(PeerResolverMethod.createSession, (params) =>
+      target.createSession(params as never),
+    );
+    rpcServer.addMethod(PeerResolverMethod.subscribeSession, (params) =>
+      target.subscribeSession(params as never, (event) =>
+        send({
+          jsonrpc: "2.0",
+          method: PeerResolverMethod.sessionEvent,
+          params: event,
+        }),
+      ),
+    );
+    rpcServer.addMethod(PeerResolverMethod.unsubscribeSession, (params) =>
+      target.unsubscribeSession(params as never),
+    );
+    rpcServer.addMethod(PeerResolverMethod.archiveSession, (params) =>
+      target.archiveSession(params as never),
+    );
+    rpcServer.addMethod(PeerResolverMethod.promptSession, (params) =>
+      target.promptSession(params as never),
+    );
+  }
+
+  function onSessionEvent(handler: (event: unknown) => void): void {
+    sessionEventHandlers.push(handler);
   }
 
   function onDisconnect(handler: () => void): void {
     disconnectHandlers.push(handler);
   }
 
-  return { connect, disconnect, request, registerTarget, onDisconnect };
+  return {
+    connect,
+    disconnect,
+    request,
+    registerTarget,
+    onSessionEvent,
+    onDisconnect,
+  };
 }
 
 function isJsonRpcPayload(payload: unknown): payload is JsonRpcPayload {

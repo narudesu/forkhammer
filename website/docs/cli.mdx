@@ -69,3 +69,17 @@ forkhammer queue read AT-123
 ```
 
 The CLI uses the same `~/.config/forkhammer/config.toml` file as the worker, so the Supabase URL, auth, and project mapping stay consistent.
+
+## Peer session commands
+
+The `peer` commands use the same resolver target as the PeerJS API. In addition to listing state, they can create worktrees and sessions, send one-shot prompts, stream summarized session events, and delete session files:
+
+```sh
+forkhammer peer create-worktree <project> <name>
+forkhammer peer create-session <worktree-path>
+forkhammer peer prompt-session <session-path> "Inspect the current changes"
+forkhammer peer subscribe-session <session-path>
+forkhammer peer archive-session <session-path>
+```
+
+Subscriptions print user/assistant messages and tool-call summaries until interrupted. Project names are the TOML project record keys; an existing worktree is reported as an error rather than reused.

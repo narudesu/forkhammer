@@ -2,102 +2,112 @@
 sidebar_position: 6
 ---
 
-# Browser Peer Connection
+# JSON-RPC peer integration
 
-Forkhammer uses [PeerJS](https://peerjs.com/) to establish a direct WebRTC data channel between the CLI worker and a browser client. This allows the browser to communicate with the worker without exposing any ports.
+Forkhammer uses **PeerJS** for signaling and a direct WebRTC data channel for communication. It uses [`json-rpc-2.0`](https://www.npmjs.com/package/json-rpc-2.0) on that channel to call worker methods.
 
-## How It Works
+## Connection flow
 
-Forkhammer does not run a server. Both ends are peers that connect through the PeerJS cloud for signaling.
+1. The browser creates a PeerJS peer and waits for its ID.
+2. The browser writes a `browser_peer_ready` event to Supabase:
 
+   ```json
+   { "event_type": "browser_peer_ready", "data": { "peerId": "<browser-peer-id>" } }
+   ```
+
+3. The worker sees the event and connects to that peer ID.
+4. On `connection`, the browser keeps the data connection open and sends JSON-RPC messages.
+
+PeerJS is only used for signaling. After the connection opens, requests and responses travel directly between the two peers.
+
+## JSON-RPC messages
+
+The worker exposes these methods:
+
+- `get-config`
+- `list-worktrees`
+- `list-sessions`
+- `get-session`
+- `create-worktree`
+- `create-session`
+- `subscribe-session`
+- `unsubscribe-session`
+- `archive-session`
+- `prompt-session`
+
+A request has an `id`, and its response uses the same ID:
+
+```json
+{ "jsonrpc": "2.0", "id": 1, "method": "list-worktrees", "params": { "project": "demo" } }
 ```
-Browser                              CLI Worker
-   |                                      |
-   |  1. new Peer('<random-id>')          |
-   |     connects to PeerJS cloud        |
-   |                                      |
-   |  2. INSERT browser_peer_ready       |
-   |     event into ultrafeed_item        |
-   |     (via Supabase)                   |
-   |                                      |
-   |                                      | 3. Supabase Realtime fires INSERT
-   |                                      |    → worker receives event
-   |                                      |    → peer store detects browser_peer_ready
-   |                                      |    → calls connectToBrowserPeer(peerId)
-   |     ← - - - - WebRTC data channel - - - - →
-   |                                      |
-   |  4. Send: { id, type: 'worktree.list' }
-   |                                      |
-   |                                      | 5. CLI finds worktrees
-   |                                      |    → returns worktree list
-   |  6. Receive: { id, type:            |
-   |       'worktree.list_response',      |
-   |       worktrees: [...] }            |
+
+```json
+{ "jsonrpc": "2.0", "id": 1, "result": { "project": "demo", "worktrees": [] } }
 ```
 
-## Step-by-Step
+Failures are returned as a JSON-RPC `error` response. Method parameters and result shapes are defined in [`src/peer-protocol/peer-protocol.ts`](https://github.com/narudesu/forkhammer/blob/main/src/peer-protocol/peer-protocol.ts).
 
-### 1. Browser connects to PeerJS cloud
+## Integrate the browser peer
 
-The browser creates a `Peer` instance with a randomly generated ID. This connects to the PeerJS public cloud (`wss://0.peerjs.com`) for signaling. The browser holds this peer connection open and waits for incoming messages.
+Install the two client dependencies:
 
-### 2. Browser signals readiness via Supabase
+```bash
+bun add peerjs json-rpc-2.0
+```
 
-The browser inserts a `browser_peer_ready` event into the `ultrafeed_item` table:
+A minimal browser-side client looks like this:
+
+```ts
+import Peer from "peerjs";
+import { JSONRPCClient } from "json-rpc-2.0";
+
+const peer = new Peer();
+
+peer.on("open", async (peerId) => {
+  // Insert this event using the application's Supabase client.
+  await supabase.from("ultrafeed_item").insert({
+    event_type: "browser_peer_ready",
+    data: { peerId },
+  });
+});
+
+peer.on("connection", (connection) => {
+  connection.on("open", () => {
+    const rpc = new JSONRPCClient((message) => connection.send(message));
+
+    connection.on("data", (message) => {
+      // The worker sends session updates as JSON-RPC notifications.
+      if (message && typeof message === "object" &&
+          (message as { method?: string }).method === "session-event") {
+        handleSessionEvent((message as { params: unknown }).params);
+        return;
+      }
+      void rpc.receive(message as never);
+    });
+
+    rpc.request("list-worktrees", { project: "demo" })
+      .then((result) => console.log(result))
+      .catch((error) => console.error(error));
+  });
+
+  connection.on("close", () => {
+    // Mark the client disconnected and create/announce a new peer when needed.
+  });
+});
+```
+
+Use the same `JSONRPCClient` instance for all requests so it can match responses to request IDs. Keep the PeerJS peer alive, handle `connection`/`close`, and announce a new `browser_peer_ready` event after reconnecting.
+
+## Session updates
+
+After calling `subscribe-session`, the worker sends notifications (they have a `method` but no request ID):
 
 ```json
 {
-  "event_type": "browser_peer_ready",
-  "data": { "peerId": "<browser-peer-id>" }
+  "jsonrpc": "2.0",
+  "method": "session-event",
+  "params": { "sessionPath": "...", "type": "assistant_message", "text": "..." }
 }
 ```
 
-The `peerId` is the browser's PeerJS ID created in step 1.
-
-### 3. CLI connects to browser
-
-The Forkhammer worker listens to Supabase Realtime for `INSERT` events on `ultrafeed_item`. When it receives a `browser_peer_ready` event, the peer store extracts the `peerId` and calls `connectToBrowserPeer(peerId)`.
-
-This opens a WebRTC connection from CLI → Browser using PeerJS cloud as the signaling service. Only the CLI initiates the connection; the browser does not need to know the CLI's peer ID.
-
-### 4. Messaging over the data channel
-
-Once the WebRTC data channel is open, the browser and CLI communicate directly without any server in between. Messages are plain JSON:
-
-**Request:**
-```json
-{ "id": "1", "type": "worktree.list" }
-```
-
-**Response:**
-```json
-{ "id": "1", "type": "worktree.list_response", "worktrees": [...] }
-```
-
-**Error:**
-```json
-{ "id": "1", "type": "error", "message": "..." }
-```
-
-## Connection Lifecycle
-
-- Only **one** browser peer can be connected at a time.
-- When a new `browser_peer_ready` event arrives, any existing peer connection is closed before connecting to the new peer.
-- If the browser disconnects, the CLI simply waits for the next `browser_peer_ready` event.
-
-## Why This Design
-
-- **No ports to expose** — The CLI does not listen on any port. All connectivity is outbound from the CLI to the PeerJS cloud.
-- **Browser controls discovery** — The browser generates its own peer ID and announces it via the existing Supabase event infrastructure.
-- **Direct P2P data** — After connection establishment, all data flows directly over WebRTC. PeerJS cloud is only used for signaling, not for the actual API calls.
-- **Uses existing infrastructure** — Supabase Realtime is already in place for the event log; the browser peer system piggybacks on it rather than adding a separate mechanism.
-
-## Browser Client Implementation
-
-The browser client lives in a separate repository. It only needs to:
-
-1. `import Peer from 'peerjs'`
-2. Create a peer with a random ID, wait for open
-3. Insert `browser_peer_ready` into `ultrafeed_item` with that ID
-4. Connect to the CLI peer when instructed
-5. Send messages and handle responses over the data channel
+Handle these notifications separately; do not pass them to the request-response flow.
