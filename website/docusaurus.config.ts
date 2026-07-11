@@ -12,7 +12,7 @@ const repoUrl = `https://github.com/${organizationName}/${projectName}`;
 
 const config: Config = {
   title: "forkhammer",
-  tagline: "workflow for processing Jira issues in isolated OpenCode worktrees",
+  tagline: "workflow for processing Jira issues in isolated worktrees",
   favicon: "img/favicon.ico",
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future

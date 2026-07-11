@@ -4,7 +4,7 @@
 
 Forkhammer is a local, event-sourced validation system for Jira issues.
 
-It uses Jira for issue context, Supabase for the event log, OpenCode for agent sessions, and git worktrees for isolated repository state.
+It uses Jira for issue context, Supabase for the event log, Pi Agent for agent sessions, and git worktrees for isolated repository state.
 
 ## Docs
 

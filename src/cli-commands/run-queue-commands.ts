@@ -10,7 +10,7 @@ import {
   type ValidationStructuredResult,
 } from "src/worker/events";
 import type { UltrafeedEvent } from "src/worker/feed/feed-events";
-import { printValidationResult } from "./validation-format";
+import { printValidationResult } from "./queue-commands/validation-format";
 
 const RECENT_EVENT_LIMIT = 50;
 const ISSUE_READ_LIMIT = 200;

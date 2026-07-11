@@ -1,15 +1,16 @@
 import { Command } from "commander";
-import { runJiraInbox } from "./commands/jira";
-import { runQueueAdd, runQueueList, runQueueRead } from "./commands/queue";
+import { runJiraInbox } from "./cli-commands/run-jira-inbox";
+import {
+  runQueueAdd,
+  runQueueList,
+  runQueueRead,
+} from "./cli-commands/run-queue-commands";
 import { runWorker } from "./run-worker";
-import { runPiPlayground } from "src/pi/pi-playground";
 
 async function runCli() {
   const program = new Command()
     .name("forkhammer")
-    .description(
-      "Validate Jira issues against a codebase and create OpenCode worktrees",
-    )
+    .description("Validate Jira issues against a codebase and create worktrees")
     .version("0.1.0");
 
   program
@@ -55,10 +56,6 @@ async function runCli() {
     .action(async (issueKey: string, options: { json?: boolean }) => {
       await runQueueRead(issueKey, Boolean(options.json));
     });
-
-  queue.command("playground").action(async () => {
-    await runPiPlayground();
-  });
 
   await program.parseAsync();
 }

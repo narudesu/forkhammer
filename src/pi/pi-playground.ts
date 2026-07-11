@@ -5,7 +5,7 @@ export async function runPiPlayground() {
   const workerConfig = await loadWorkerConfig();
   const ctx = createWorkerContext(workerConfig, []);
 
-  await ctx.pi.runIssueValidation({
-    jiraKey: "AT-1145",
-  });
+  // await ctx.pi.runIssueValidation({
+  //   jiraKey: "AT-1145",
+  // });
 }

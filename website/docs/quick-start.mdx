@@ -41,12 +41,11 @@ You need to have docker compose installed. If you don't, see https://docs.docker
 
 ```sh
 # first, build the docker image
-# the Dockerfile extends the opencode image, installs bun and builds the forkhammer executable
+# the Dockerfile installs bun and builds the forkhammer executable
 docker-compose build
 
 # start the docker container
-# it launches an opencode server running on port 8000, exposed to the host
-# and it launches the forkhammer worker, listening for new supabase table events
+# it launches the forkhammer worker, listening for new supabase table events
 docker-compose up -d
 
 # here are some useful commands:
@@ -60,32 +59,3 @@ docker-compose down -v
 # see the container status
 docker-compose ps
 ```
-
-**Set up OpenCode**
-
-Visit `localhost:8000` to access your opencode web UI.
-
-Here, you can configure your model providers, settings and open projects.
-
-The opencode runs inside the docker container, so it only has access to the mounted folder.
-
-**Get to know created directories**
-
-After the container is started, opencode creates the `~/code/forkhammer/opencode` directory.
-
-It contains these files:
-
-```
-log
-opencode.db
-opencode.db-shm
-opencode.db-wal
-```
-
-They are used by opencode to keep the state of your sessions.
-
-Then there is the `~/code/forkhammer/config/opencode` folder which serves as the configuration folder for OpenCode.
-
-If you configure an AI model provider, a file called `opencode.json` should appear.
-
-See https://opencode.ai/docs/config for more detail on the file.

@@ -30,16 +30,6 @@ const FeatureList: FeatureItem[] = [
       </>
     ),
   },
-  {
-    title: "OpenCode Ready",
-    image: require("@site/static/img/opencode-ready.png").default,
-    description: (
-      <>
-        forkhammer integrates with a local OpenCode server to launch sessions
-        that validate issue context directly against your repository.
-      </>
-    ),
-  },
 ];
 
 function Feature({ title, image, description }: FeatureItem) {

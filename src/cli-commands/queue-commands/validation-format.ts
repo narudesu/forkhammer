@@ -1,5 +1,5 @@
 import chalk from "chalk";
-import type { ValidationStructuredResult } from "../worker/events";
+import type { ValidationStructuredResult } from "../../worker/events";
 
 type ValidationFormatOptions = {
   worktreeDirectory?: string;

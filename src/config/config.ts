@@ -10,7 +10,7 @@ const zProjectConfig = z.object({
 });
 
 const zConfig = z.object({
-  opencode: z
+  agent: z
     .object({
       default_provider_id: z.string().min(1).optional(),
       default_model_id: z.string().min(1).optional(),

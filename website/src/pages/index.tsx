@@ -33,7 +33,7 @@ export default function Home(): ReactNode {
   return (
     <Layout
       title="forkhammer"
-      description="Event-sourced Jira validation for OpenCode"
+      description="Event-sourced Jira ticket validation"
     >
       <HomepageHeader />
       <main>

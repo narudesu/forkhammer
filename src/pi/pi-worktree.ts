@@ -1,6 +1,6 @@
 import { execa } from "execa";
 import path from "node:path";
-import { WorkerConfig } from "src/worker/config";
+import type { WorkerConfig } from "src/worker/config";
 
 export type ResolvedProject = {
   name: string;
@@ -14,7 +14,7 @@ export type ResolvedWorktree = {
   directory: string;
 };
 
-const PI_WORKTREE_ROOT = "/home/naru/code/forkhammer/trees";
+const PI_WORKTREE_ROOT = path.resolve(process.env.XDG_DATA_HOME!, "trees");
 
 export abstract class ProjectConfig {
   abstract resolveByJiraKey(issueKey: string): ForkhammerProject;

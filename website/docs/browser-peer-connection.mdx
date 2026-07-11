@@ -4,7 +4,7 @@ sidebar_position: 6
 
 # Browser Peer Connection
 
-Forkhammer uses [PeerJS](https://peerjs.com/) to establish a direct WebRTC data channel between the CLI worker and a browser client. This allows the browser to query the OpenCode API without exposing any ports.
+Forkhammer uses [PeerJS](https://peerjs.com/) to establish a direct WebRTC data channel between the CLI worker and a browser client. This allows the browser to communicate with the worker without exposing any ports.
 
 ## How It Works
 
@@ -28,7 +28,7 @@ Browser                              CLI Worker
    |                                      |
    |  4. Send: { id, type: 'worktree.list' }
    |                                      |
-   |                                      | 5. CLI calls OpenCode API
+   |                                      | 5. CLI finds worktrees
    |                                      |    → returns worktree list
    |  6. Receive: { id, type:            |
    |       'worktree.list_response',      |

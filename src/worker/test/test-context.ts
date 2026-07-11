@@ -6,8 +6,8 @@ import {
   type CreateTestJiraClientOptions,
 } from "src/worker/test/test-jira-client";
 import {
-  type CreateTestSupabaseClientOptions,
   TestSupabaseClient,
+  type CreateTestSupabaseClientOptions,
 } from "src/worker/test/test-supabase-client";
 
 interface CreateTextContextOptions {
@@ -45,6 +45,7 @@ export function createTestContext(
   const workerContext: WorkerContext = {
     jira,
     workerConfig: {
+      project: {},
       jira: jiraConfig,
       supabase: {
         url: "https://example.supabase.co",
@@ -72,7 +73,6 @@ export function createTestContext(
     pi: {} as WorkerContext["pi"],
     stores: [],
     peerClient: {} as WorkerContext["peerClient"],
-    validation: {} as WorkerContext["validation"],
     snapshots: {} as WorkerContext["snapshots"],
     log: {
       debug: () => {},

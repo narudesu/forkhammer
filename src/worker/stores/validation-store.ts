@@ -10,7 +10,7 @@ import {
 import { produce } from "immer";
 import type { WorkerContext } from "src/worker/context/types";
 import { getIssueKey } from "src/worker/domain";
-import type { UltrafeedEventData, ValidationProvider } from "src/worker/events";
+import type { UltrafeedEventData } from "src/worker/events";
 import { parseUltrafeedEventData } from "src/worker/events";
 import { reconcileRequested } from "src/worker/events/store-events";
 import { feedEventReceived } from "src/worker/jira-artifact/jira-artifact-events";
@@ -22,7 +22,6 @@ import {
 
 type IssueState = {
   requestEventId: string | null;
-  provider: ValidationProvider;
   started: boolean;
   completed: boolean;
   lastError: string | null;
@@ -60,7 +59,6 @@ type ValidationDispatchRequest = {
   ctx: WorkerContext;
   issueKey: string;
   requestEventId: string;
-  provider: ValidationProvider;
 };
 
 type PromptDispatchRequest = {
@@ -143,7 +141,6 @@ $validationStore.on(feedEventReceived, (state, event) =>
       ) as UltrafeedEventData<"validate_issue_requested"> | null;
       if (!parsed) return;
       issue.requestEventId = event.id;
-      issue.provider = parsed.provider;
       issue.started = false;
       issue.completed = false;
       issue.lastError = null;
@@ -247,48 +244,21 @@ $validationRuntimeStore.on(promptDispatchFailed, (state, action) =>
 );
 
 const effectRunIssueValidation = createEffect(
-  async ({ ctx, issueKey, provider }: ValidationDispatchRequest) => {
+  async ({ ctx, issueKey }: ValidationDispatchRequest) => {
     try {
       ctx.log.debug(
-        `${storeLabel} ${sideEffectLabel} dispatching validation for ${chalk.green(issueKey)} provider ${chalk.green(provider)}`,
+        `${storeLabel} ${sideEffectLabel} dispatching validation for ${chalk.green(issueKey)}`,
       );
-      await ctx.validation.runIssueValidation({ key: issueKey, provider });
+      await ctx.pi.runIssueValidation({
+        jiraKey: issueKey,
+        writer: ctx.writer,
+      });
       ctx.log.debug(
         `${storeLabel} ${successLabel} dispatched validation for ${chalk.green(issueKey)}`,
       );
     } catch (error) {
       ctx.log.error(
         `${storeLabel} ${failureLabel} validation for ${chalk.green(issueKey)}: ${chalk.red(formatError(error))}`,
-      );
-      throw error;
-    }
-  },
-);
-
-const effectRunIssuePrompt = createEffect(
-  async ({ ctx, issueKey, promptRequest }: PromptDispatchRequest) => {
-    try {
-      ctx.log.debug(
-        `${storeLabel} ${sideEffectLabel} dispatching prompt for ${chalk.green(issueKey)} (${chalk.white(promptRequest.requestEventId)})`,
-      );
-      await ctx.validation.runIssuePrompt({
-        issueKey,
-        requestEventId: promptRequest.requestEventId,
-        prompt: promptRequest.prompt,
-        projectKey: promptRequest.projectKey,
-        projectName: promptRequest.projectName,
-        projectId: promptRequest.projectId,
-        sessionId: promptRequest.sessionId,
-        worktreeName: promptRequest.worktreeName,
-        worktreeBranch: promptRequest.worktreeBranch,
-        worktreeDirectory: promptRequest.worktreeDirectory,
-      });
-      ctx.log.debug(
-        `${storeLabel} ${successLabel} dispatched prompt for ${chalk.green(issueKey)} (${chalk.white(promptRequest.requestEventId)})`,
-      );
-    } catch (error) {
-      ctx.log.error(
-        `${storeLabel} ${failureLabel} prompt for ${chalk.green(issueKey)} (${chalk.white(promptRequest.requestEventId)}): ${chalk.red(formatError(error))}`,
       );
       throw error;
     }
@@ -358,11 +328,6 @@ sample({
 });
 
 sample({
-  clock: promptDispatchQueued,
-  target: effectRunIssuePrompt,
-});
-
-sample({
   clock: effectRunIssueValidation.fail,
   fn: ({ params, error }) => ({
     issueKey: params.issueKey,
@@ -370,16 +335,6 @@ sample({
     error,
   }),
   target: validationDispatchFailed,
-});
-
-sample({
-  clock: effectRunIssuePrompt.fail,
-  fn: ({ params, error }) => ({
-    issueKey: params.issueKey,
-    requestEventId: params.promptRequest.requestEventId,
-    error,
-  }),
-  target: promptDispatchFailed,
 });
 
 function findValidationDispatchRequests(
@@ -402,7 +357,6 @@ function findValidationDispatchRequests(
       ctx,
       issueKey,
       requestEventId: issue.requestEventId,
-      provider: issue.provider,
     });
   }
 
@@ -440,7 +394,6 @@ function getOrCreateIssue(
 
   const created: IssueState = {
     requestEventId: null,
-    provider: "pi",
     started: false,
     completed: false,
     lastError: null,
@@ -454,7 +407,6 @@ function getOrCreateIssue(
 
 function normalizeIssueState(issue: Partial<IssueState>): IssueState {
   issue.requestEventId ??= null;
-  issue.provider ??= "pi";
   issue.started ??= false;
   issue.completed ??= false;
   issue.lastError ??= null;

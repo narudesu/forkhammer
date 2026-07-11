@@ -1,11 +1,11 @@
 # an example config, modify it to your needs
 
-[opencode]
+[agent]
 # choose your desired model that will be used to process the work plans
-# my current favorite is gpt-5.4-mini
-# you'll need to configure your API keys in OpenCode config to be able to use the model
-default_provider_id = "openai"
-default_model_id = "gpt-5.4-mini"
+# my current favorite is gpt-5.6-luna
+# you'll need to configure your pi config to be able to use the model
+default_provider_id = "openai-codex"
+default_model_id = "gpt-5.6-luna"
 
 [jira]
 # set up your jira instance url + jira email + api token

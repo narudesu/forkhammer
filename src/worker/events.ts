@@ -10,16 +10,10 @@ const zIssueComment = z.object({
   createdAt: z.string().min(1),
 });
 
-export const validationProviderSchema = z.enum(["opencode", "pi"]);
-
 const zValidationSessionContext = z.object({
-  provider: validationProviderSchema.default("pi"),
   issue_key: zIssueKey,
   project_key: z.string().min(1),
   project_name: z.string().min(1),
-  // Legacy OpenCode prompt events use this to verify their OpenCode project.
-  // New validation lifecycle events do not emit it.
-  project_id: z.string().min(1).optional(),
   session_id: z.string().min(1),
   worktree_name: z.string().min(1),
   worktree_branch: z.string().min(1),
@@ -47,7 +41,6 @@ export const validationStructuredResultSchema = z.object({
 
 const zValidateIssueRequestedData = z.object({
   issue_key: zIssueKey,
-  provider: validationProviderSchema.default("pi"),
 });
 
 const zArtifactRefreshRequestedData = z.object({
@@ -84,7 +77,6 @@ const zIssueValidatedData = validationStructuredResultSchema.extend({
 });
 
 const zIssueValidationFailedData = z.object({
-  provider: validationProviderSchema.default("pi"),
   issue_key: zIssueKey,
   error: zValidationError,
 });
@@ -125,13 +117,13 @@ export const ultrafeedEventDefinitions = [
   {
     eventType: "validate_issue_prompt_completed",
     description:
-      "A worker success event containing the prompt response from an OpenCode session.",
+      "A worker success event containing the prompt response from a validation session.",
     dataSchema: zValidateIssuePromptCompletedData,
   },
   {
     eventType: "validate_issue_prompt_failed",
     description:
-      "A worker failure event emitted when an OpenCode session prompt cannot be sent.",
+      "A worker failure event emitted when a session prompt cannot be sent.",
     dataSchema: zValidateIssuePromptFailedData,
   },
   {
@@ -191,8 +183,6 @@ export type UltrafeedEventType = keyof typeof ultrafeedEventSchemas;
 export type UltrafeedEventData<
   TEventType extends UltrafeedEventType = UltrafeedEventType,
 > = z.infer<(typeof ultrafeedEventSchemas)[TEventType]>;
-
-export type ValidationProvider = z.infer<typeof validationProviderSchema>;
 
 export type ValidationStructuredResult = z.infer<
   typeof validationStructuredResultSchema

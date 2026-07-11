@@ -2,11 +2,11 @@
 
 ## Repo Shape
 - `src/` is the CLI; `src/cli.ts` is the entrypoint and currently registers only `forkhammer new`.
-- `website/` is the Docusaurus docs site and the OpenCode container stack lives in top-level `Dockerfile`, `docker-compose.yml`, and `docker-tools/`.
+- `website/` is the Docusaurus docs site and the container stack lives in top-level `Dockerfile`, `docker-compose.yml`, and `docker-tools/`.
 
 ## Architecture
 - Forkhammer is event-sourced: the event log is the source of truth, and state is rebuilt from stored snapshots plus replayed backfill events.
-- The worker reacts to new events, loads Jira context, opens OpenCode sessions in isolated worktrees, and emits result events.
+- The worker reacts to new events, loads Jira context, opens Pi Agent sessions in isolated worktrees, and emits result events.
 - Projections are read models built from events; side effects happen after projections are up to date.
 - Prefer changes that preserve this flow instead of introducing a single mutable global state object.
 

@@ -5,14 +5,8 @@ import {
   createStore,
   type Scope,
   sample,
-  scopeBind,
 } from "effector";
 import { produce } from "immer";
-import { handleOpencodeSessionCreate } from "src/peer-handlers/handle-opencode-session-create";
-import { handleOpencodeSessionPrompt } from "src/peer-handlers/handle-opencode-session-prompt";
-import { handleOpencodeStatus } from "src/peer-handlers/handle-opencode-status";
-import { handleWorktreeList } from "src/peer-handlers/handle-worktree-list";
-import type { OpencodeAgent } from "src/peer-protocol/peer-protocol";
 import type { WorkerContext } from "src/worker/context/types";
 import { parseUltrafeedEventData } from "src/worker/events";
 import { reconcileRequested } from "src/worker/events/store-events";
@@ -33,7 +27,7 @@ export type PeerStoreState = {
 type PeerRuntimeStoreState = {
   activePeerId: string | null;
   sessionIssueKeys: Record<string, string>;
-  sessionAgents: Record<string, OpencodeAgent>;
+  sessionAgents: Record<string, {}>;
 };
 
 export const $peerStore = createStore<PeerStoreState>(
@@ -61,7 +55,7 @@ const peerSessionIssueKeySet = createEvent<{
 }>();
 const peerSessionAgentSet = createEvent<{
   sessionId: string;
-  agent: OpencodeAgent;
+  agent: {};
 }>();
 
 $peerStore.on(feedEventReceived, (state, action) =>
@@ -116,39 +110,10 @@ $peerRuntimeStore.on(peerSessionAgentSet, (state, action) =>
 );
 
 const effectRegisterPeerHandlers = createEffect(
-  async ({ ctx, scope }: { ctx: WorkerContext; scope: Scope }) => {
+  async ({ ctx }: { ctx: WorkerContext; scope: Scope }) => {
     const client = ctx.peerClient;
-    const setIssueKey = scopeBind(peerSessionIssueKeySet, { scope });
-    const setAgent = scopeBind(peerSessionAgentSet, { scope });
-    const sessionMetadataStore = {
-      setIssueKey: (sessionId: string, issueKey: string) => {
-        setIssueKey({ sessionId, issueKey });
-      },
-      setAgent: (sessionId: string, agent: OpencodeAgent) => {
-        setAgent({ sessionId, agent });
-      },
-    };
 
-    client.register("worktree.list", (message) => {
-      handleWorktreeList(message, client.send);
-    });
-    client.register("opencode.status", (message) => {
-      const state = scope.getState($peerStore);
-      const runtimeState = scope.getState($peerRuntimeStore);
-      handleOpencodeStatus(message, client.send, {
-        issueKeys: {
-          ...state.sessionIssueKeys,
-          ...runtimeState.sessionIssueKeys,
-        },
-        agents: runtimeState.sessionAgents,
-      });
-    });
-    client.register("opencode.session.create", (message) => {
-      handleOpencodeSessionCreate(message, client.send, sessionMetadataStore);
-    });
-    client.register("opencode.session.prompt", (message) => {
-      handleOpencodeSessionPrompt(message, client.send);
-    });
+    client.register("noop", () => {});
   },
 );
 

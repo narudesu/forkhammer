@@ -1,15 +1,13 @@
 import path from "node:path";
-import { ProjectConfig } from "src/commands/project-worktree";
-import { getIssueContext, type JiraClient } from "src/jira/jira";
+import type { JiraClient } from "src/jira/jira";
 import { PiJiraPrompt } from "src/pi/pi-jira-prompt";
 import { logPiEvent } from "src/pi/pi-logger";
 import { PiSessionGateway } from "src/pi/pi-session";
+import { ProjectConfig } from "src/pi/pi-worktree";
 import { SubmitImplementationPlanTool } from "src/pi/tools/submit-implementation-plan-tool";
 import type { WorkerConfig } from "src/worker/config";
-import type {
-  UltrafeedEventData,
-  ValidationStructuredResult,
-} from "src/worker/events";
+import type { ValidationStructuredResult } from "src/worker/events";
+import type { UltrafeedWriter } from "src/worker/ultrafeed-writer";
 
 export abstract class PiGateway {
   abstract runIssueValidation(
@@ -20,20 +18,8 @@ export abstract class PiGateway {
 
 export interface RunIssueValidationOptions {
   jiraKey: string;
-  hooks?: PiValidationEventHooks;
+  writer: UltrafeedWriter;
 }
-
-export type PiValidationEventHooks = {
-  onStarted?: (
-    data: UltrafeedEventData<"validate_issue_started">,
-  ) => Promise<void> | void;
-  onSucceeded?: (
-    data: UltrafeedEventData<"issue_validated">,
-  ) => Promise<void> | void;
-  onFailed?: (
-    data: UltrafeedEventData<"issue_validation_failed">,
-  ) => Promise<void> | void;
-};
 
 export type PiValidationRunResult = {
   issueKey: string;
@@ -54,6 +40,7 @@ export function createPiGateway(
   return {
     async runIssueValidation(opts) {
       const issueKey = opts.jiraKey;
+      const writer = opts.writer;
 
       try {
         // Fetch issue from Jira so we can inject it
@@ -74,6 +61,7 @@ export function createPiGateway(
         const { session } = await PiSessionGateway.create({
           directory: worktree.directory,
           planTool,
+          agentConfig: config.agent,
         });
 
         const piSessionFile = session.sessionFile
@@ -92,11 +80,14 @@ export function createPiGateway(
           pi_session_file: session.sessionFile,
         };
 
-        await opts.hooks?.onStarted?.({
-          ...identifiers,
-          issue_summary: issue.summary,
-          jira_description: issue.description,
-          issue_comments: issue.comments,
+        await writer.write({
+          eventType: "validate_issue_started",
+          data: {
+            ...identifiers,
+            issue_summary: issue.summary,
+            jira_description: issue.description,
+            issue_comments: issue.comments,
+          },
         });
 
         session.subscribe(logPiEvent);
@@ -106,11 +97,14 @@ export function createPiGateway(
         );
         const result = await planTool.oncePlan();
 
-        await opts.hooks?.onSucceeded?.({
-          ...identifiers,
-          source: "forkhammer",
-          jira_summary: issue.summary,
-          ...result,
+        await writer.write({
+          eventType: "issue_validated",
+          data: {
+            ...identifiers,
+            source: "forkhammer",
+            jira_summary: issue.summary,
+            ...result,
+          },
         });
 
         return {
@@ -125,10 +119,13 @@ export function createPiGateway(
           result,
         };
       } catch (error) {
-        await opts.hooks?.onFailed?.({
-          provider: "pi",
-          issue_key: opts.jiraKey,
-          error: toErrorMessage(error),
+        await writer.write({
+          eventType: "issue_validation_failed",
+          data: {
+            provider: "pi",
+            issue_key: opts.jiraKey,
+            error: toErrorMessage(error),
+          },
         });
         throw error;
       }

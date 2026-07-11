@@ -20,7 +20,7 @@ validate_issue_requested event
 worker reads the event
     |
     +--> loads Jira context
-    +--> opens an OpenCode session in a worktree
+    +--> opens a Pi agent session in a worktree
     |
     v
 worker emits result events
@@ -81,4 +81,4 @@ for event in events:
 
 ## Side Effects
 
-After a projection is up-to-date, we run side effects such as creating a new opencode session.
+After a projection is up-to-date, we run side effects such as creating a new session.

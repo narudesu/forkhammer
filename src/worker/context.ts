@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import createDebug from "debug";
+import { JiraClient } from "src/jira/jira";
 import { createPeerClient } from "src/peer-protocol/peer-client";
+import { PiGateway } from "src/pi/pi-gateway";
 import { SupabaseAuth } from "src/worker/auth";
 import type { WorkerConfig } from "src/worker/config";
 import type { WorkerContext } from "src/worker/context/types";
@@ -10,14 +12,6 @@ import {
   type UnknownHydratableStore,
 } from "src/worker/snapshot/effector-snapshots";
 import { UltrafeedWriter } from "src/worker/ultrafeed-writer";
-import {
-  runIssuePrompt,
-  runIssueValidation,
-  type ValidationEventHooks,
-} from "../commands/new";
-import type { PiValidationEventHooks } from "src/pi/pi-gateway";
-import { JiraClient } from "src/jira/jira";
-import { PiGateway } from "src/pi/pi-gateway";
 
 export function createWorkerContext(
   workerConfig: WorkerConfig,
@@ -73,49 +67,6 @@ export function createWorkerContext(
     stores,
     auth,
     snapshots,
-    validation: {
-      runIssueValidation: async (input) => {
-        const hooks: ValidationEventHooks & PiValidationEventHooks = {
-          onStarted: async (data) => {
-            await writer.write({ eventType: "validate_issue_started", data });
-          },
-          onSucceeded: async (data) => {
-            await writer.write({ eventType: "issue_validated", data });
-          },
-          onFailed: async (data) => {
-            await writer.write({ eventType: "issue_validation_failed", data });
-          },
-        };
-        if (input.provider === "pi") {
-          await pi.runIssueValidation({ jiraKey: input.key, hooks });
-          return;
-        }
-        await runIssueValidation({
-          key: input.key,
-          streamEvents: false,
-          hooks,
-        });
-      },
-      runIssuePrompt: async (input) => {
-        await runIssuePrompt({
-          ...input,
-          hooks: {
-            onPromptCompleted: async (data) => {
-              await writer.write({
-                eventType: "validate_issue_prompt_completed",
-                data,
-              });
-            },
-            onPromptFailed: async (data) => {
-              await writer.write({
-                eventType: "validate_issue_prompt_failed",
-                data,
-              });
-            },
-          },
-        });
-      },
-    },
     log: {
       debug,
       warn: (...args) => console.warn(...args),
