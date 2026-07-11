@@ -153,7 +153,7 @@ export async function runIssueValidation(input: {
     const project = resolveProject(config, input.key, input.project);
     const gitRoot = await resolveGitRoot(project.root, process.cwd());
 
-    const issue = await getIssueContext(config, input.key);
+    const issue = await getIssueContext(config.jira!, input.key);
     issueKey = issue.key;
     const context = formatIssueContext(issue);
 

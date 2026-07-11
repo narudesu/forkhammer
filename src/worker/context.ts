@@ -12,6 +12,7 @@ import {
 import { UltrafeedWriter } from "src/worker/ultrafeed-writer";
 import { runIssuePrompt, runIssueValidation } from "../commands/new";
 import { JiraClient } from "src/jira/jira";
+import { PiGateway } from "src/pi/pi-gateway";
 
 export function createWorkerContext(
   workerConfig: WorkerConfig,
@@ -55,9 +56,12 @@ export function createWorkerContext(
 
   const jira = JiraClient.create(workerConfig.jira);
 
+  const pi = PiGateway.create(jira, workerConfig);
+
   const ctx: WorkerContext = {
     workerConfig,
     writer,
+    pi,
     jira,
     peerClient,
     supabase,

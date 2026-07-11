@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { JiraClient } from "src/jira/jira";
 import type { PeerClient } from "src/peer-protocol/peer-client";
+import { PiGateway } from "src/pi/pi-gateway";
 import type { SupabaseAuth } from "src/worker/auth";
 import type { WorkerConfig } from "src/worker/config";
 import type {
@@ -16,6 +17,7 @@ export interface WorkerContext {
   jira: JiraClient;
   writer: UltrafeedWriter;
   stores: UnknownHydratableStore[];
+  pi: PiGateway;
   peerClient: PeerClient;
   validation: WorkerValidation;
   snapshots: EffectorSnapshotRepository;

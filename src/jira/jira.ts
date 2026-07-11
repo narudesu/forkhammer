@@ -11,6 +11,7 @@ import {
 
 export abstract class JiraClient {
   abstract getJiraInboxIssues(): Promise<JiraInboxIssue[]>;
+  abstract getIssueContext(opts: { issueKey: string }): Promise<IssueContext>;
 
   static create = createClient;
 }
@@ -68,24 +69,22 @@ function createClient(config: NonNullable<Config["jira"]>): JiraClient {
 
       return issues;
     },
+    getIssueContext: async (opts) =>
+      await getIssueContext(config, opts.issueKey),
   };
 }
 
 export async function getIssueContext(
-  config: Config,
+  config: NonNullable<Config["jira"]>,
   key: string,
 ): Promise<IssueContext> {
-  if (!config.jira) {
-    throw new Error("jira-config-not-found");
-  }
-
-  const url = new URL(config.jira.url);
+  const url = new URL(config.url);
   url.pathname = `/rest/api/latest/issue/${key}`;
 
   const response = await fetch(url, {
     method: "GET",
     headers: {
-      Authorization: `Basic ${Buffer.from(config.jira.auth).toString("base64")}`,
+      Authorization: `Basic ${Buffer.from(config.auth).toString("base64")}`,
       "Content-Type": "application/json",
     },
   });

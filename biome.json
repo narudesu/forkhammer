@@ -5,6 +5,7 @@
     "indentStyle": "space",
     "indentWidth": 2
   },
+  "linter": { "rules": { "complexity": { "noStaticOnlyClass": "off" } } },
   "javascript": {
     "formatter": {
       "quoteStyle": "double"

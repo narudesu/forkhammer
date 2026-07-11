@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { runJiraInbox } from "./commands/jira";
 import { runQueueAdd, runQueueList, runQueueRead } from "./commands/queue";
 import { runWorker } from "./run-worker";
+import { runPiPlayground } from "src/pi/pi-playground";
 
 async function runCli() {
   const program = new Command()
@@ -54,6 +55,10 @@ async function runCli() {
     .action(async (issueKey: string, options: { json?: boolean }) => {
       await runQueueRead(issueKey, Boolean(options.json));
     });
+
+  queue.command("playground").action(async () => {
+    await runPiPlayground();
+  });
 
   await program.parseAsync();
 }
