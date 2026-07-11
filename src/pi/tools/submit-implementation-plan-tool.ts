@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { ResolvablePromise } from "src/worker/resolvable-promise";
 import { Type } from "typebox";
 
 export const planSchema = Type.Object({
@@ -24,13 +25,15 @@ type PlanSchema = Type.Static<typeof planSchema>;
 export abstract class SubmitImplementationPlanTool {
   abstract register(pi: ExtensionAPI): void;
   abstract toolName: string;
+  abstract oncePlan(): Promise<PlanSchema>;
 
-  static create(opts: {
-    onSubmittedPlan: (plan: PlanSchema) => void;
-  }): SubmitImplementationPlanTool {
+  static create(): SubmitImplementationPlanTool {
     const toolName = "submit_implementation_plan";
+    const planPromise = ResolvablePromise.create<PlanSchema>();
+
     return {
       toolName,
+      oncePlan: () => Promise.resolve(planPromise.promise),
       register(pi) {
         pi.registerTool({
           name: toolName,
@@ -38,7 +41,7 @@ export abstract class SubmitImplementationPlanTool {
           description: "Submits a implementation plan",
           parameters: planSchema,
           execute: async (_toolCallId, params, _signal, _onUpdate, _ctx) => {
-            opts.onSubmittedPlan(params);
+            planPromise.resolve(params);
             return {
               content: [
                 {

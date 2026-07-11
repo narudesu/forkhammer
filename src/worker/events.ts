@@ -10,17 +10,21 @@ const zIssueComment = z.object({
   createdAt: z.string().min(1),
 });
 
+export const validationProviderSchema = z.enum(["opencode", "pi"]);
+
 const zValidationSessionContext = z.object({
+  provider: validationProviderSchema.default("pi"),
   issue_key: zIssueKey,
   project_key: z.string().min(1),
   project_name: z.string().min(1),
-  project_id: z.string().min(1),
+  // Legacy OpenCode prompt events use this to verify their OpenCode project.
+  // New validation lifecycle events do not emit it.
+  project_id: z.string().min(1).optional(),
   session_id: z.string().min(1),
   worktree_name: z.string().min(1),
   worktree_branch: z.string().min(1),
   worktree_directory: z.string().min(1),
-  opencode_project_id: z.string().min(1).optional(),
-  opencode_sandbox_name: z.string().min(1).optional(),
+  pi_session_file: z.string().min(1).optional(),
 });
 
 const zValidationQuestion = z.object({
@@ -43,6 +47,7 @@ export const validationStructuredResultSchema = z.object({
 
 const zValidateIssueRequestedData = z.object({
   issue_key: zIssueKey,
+  provider: validationProviderSchema.default("pi"),
 });
 
 const zArtifactRefreshRequestedData = z.object({
@@ -79,6 +84,7 @@ const zIssueValidatedData = validationStructuredResultSchema.extend({
 });
 
 const zIssueValidationFailedData = z.object({
+  provider: validationProviderSchema.default("pi"),
   issue_key: zIssueKey,
   error: zValidationError,
 });
@@ -185,6 +191,8 @@ export type UltrafeedEventType = keyof typeof ultrafeedEventSchemas;
 export type UltrafeedEventData<
   TEventType extends UltrafeedEventType = UltrafeedEventType,
 > = z.infer<(typeof ultrafeedEventSchemas)[TEventType]>;
+
+export type ValidationProvider = z.infer<typeof validationProviderSchema>;
 
 export type ValidationStructuredResult = z.infer<
   typeof validationStructuredResultSchema

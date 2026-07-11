@@ -10,7 +10,7 @@ import {
 import { produce } from "immer";
 import type { WorkerContext } from "src/worker/context/types";
 import { getIssueKey } from "src/worker/domain";
-import type { UltrafeedEventData } from "src/worker/events";
+import type { UltrafeedEventData, ValidationProvider } from "src/worker/events";
 import { parseUltrafeedEventData } from "src/worker/events";
 import { reconcileRequested } from "src/worker/events/store-events";
 import { feedEventReceived } from "src/worker/jira-artifact/jira-artifact-events";
@@ -22,6 +22,7 @@ import {
 
 type IssueState = {
   requestEventId: string | null;
+  provider: ValidationProvider;
   started: boolean;
   completed: boolean;
   lastError: string | null;
@@ -59,6 +60,7 @@ type ValidationDispatchRequest = {
   ctx: WorkerContext;
   issueKey: string;
   requestEventId: string;
+  provider: ValidationProvider;
 };
 
 type PromptDispatchRequest = {
@@ -135,7 +137,13 @@ $validationStore.on(feedEventReceived, (state, event) =>
     const issue = getOrCreateIssue(state, issueKey);
 
     if (event.event_type === "validate_issue_requested") {
+      const parsed = parseUltrafeedEventData(
+        event.event_type,
+        event.data,
+      ) as UltrafeedEventData<"validate_issue_requested"> | null;
+      if (!parsed) return;
       issue.requestEventId = event.id;
+      issue.provider = parsed.provider;
       issue.started = false;
       issue.completed = false;
       issue.lastError = null;
@@ -159,7 +167,7 @@ $validationStore.on(feedEventReceived, (state, event) =>
         prompt: parsed.prompt,
         projectKey: parsed.project_key,
         projectName: parsed.project_name,
-        projectId: parsed.project_id,
+        projectId: parsed.project_id ?? "",
         sessionId: parsed.session_id,
         worktreeName: parsed.worktree_name,
         worktreeBranch: parsed.worktree_branch,
@@ -239,12 +247,12 @@ $validationRuntimeStore.on(promptDispatchFailed, (state, action) =>
 );
 
 const effectRunIssueValidation = createEffect(
-  async ({ ctx, issueKey }: ValidationDispatchRequest) => {
+  async ({ ctx, issueKey, provider }: ValidationDispatchRequest) => {
     try {
       ctx.log.debug(
-        `${storeLabel} ${sideEffectLabel} dispatching validation for ${chalk.green(issueKey)}`,
+        `${storeLabel} ${sideEffectLabel} dispatching validation for ${chalk.green(issueKey)} provider ${chalk.green(provider)}`,
       );
-      await ctx.validation.runIssueValidation({ key: issueKey });
+      await ctx.validation.runIssueValidation({ key: issueKey, provider });
       ctx.log.debug(
         `${storeLabel} ${successLabel} dispatched validation for ${chalk.green(issueKey)}`,
       );
@@ -390,7 +398,12 @@ function findValidationDispatchRequests(
       continue;
     }
 
-    requests.push({ ctx, issueKey, requestEventId: issue.requestEventId });
+    requests.push({
+      ctx,
+      issueKey,
+      requestEventId: issue.requestEventId,
+      provider: issue.provider,
+    });
   }
 
   return requests;
@@ -427,6 +440,7 @@ function getOrCreateIssue(
 
   const created: IssueState = {
     requestEventId: null,
+    provider: "pi",
     started: false,
     completed: false,
     lastError: null,
@@ -440,6 +454,7 @@ function getOrCreateIssue(
 
 function normalizeIssueState(issue: Partial<IssueState>): IssueState {
   issue.requestEventId ??= null;
+  issue.provider ??= "pi";
   issue.started ??= false;
   issue.completed ??= false;
   issue.lastError ??= null;

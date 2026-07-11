@@ -10,7 +10,12 @@ import {
   type UnknownHydratableStore,
 } from "src/worker/snapshot/effector-snapshots";
 import { UltrafeedWriter } from "src/worker/ultrafeed-writer";
-import { runIssuePrompt, runIssueValidation } from "../commands/new";
+import {
+  runIssuePrompt,
+  runIssueValidation,
+  type ValidationEventHooks,
+} from "../commands/new";
+import type { PiValidationEventHooks } from "src/pi/pi-gateway";
 import { JiraClient } from "src/jira/jira";
 import { PiGateway } from "src/pi/pi-gateway";
 
@@ -70,29 +75,25 @@ export function createWorkerContext(
     snapshots,
     validation: {
       runIssueValidation: async (input) => {
+        const hooks: ValidationEventHooks & PiValidationEventHooks = {
+          onStarted: async (data) => {
+            await writer.write({ eventType: "validate_issue_started", data });
+          },
+          onSucceeded: async (data) => {
+            await writer.write({ eventType: "issue_validated", data });
+          },
+          onFailed: async (data) => {
+            await writer.write({ eventType: "issue_validation_failed", data });
+          },
+        };
+        if (input.provider === "pi") {
+          await pi.runIssueValidation({ jiraKey: input.key, hooks });
+          return;
+        }
         await runIssueValidation({
           key: input.key,
           streamEvents: false,
-          hooks: {
-            onStarted: async (data) => {
-              await writer.write({
-                eventType: "validate_issue_started",
-                data,
-              });
-            },
-            onSucceeded: async (data) => {
-              await writer.write({
-                eventType: "issue_validated",
-                data,
-              });
-            },
-            onFailed: async (data) => {
-              await writer.write({
-                eventType: "issue_validation_failed",
-                data,
-              });
-            },
-          },
+          hooks,
         });
       },
       runIssuePrompt: async (input) => {

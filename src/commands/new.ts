@@ -36,21 +36,18 @@ type ValidationIdentifiers = {
   worktreeName: string;
   worktreeBranch: string;
   worktreeDirectory: string;
-  opencodeProjectId?: string;
-  opencodeSandboxName?: string;
 };
 
 type ValidationEventIdentifiers = {
+  provider: "opencode";
   issue_key: string;
   project_key: string;
   project_name: string;
-  project_id: string;
+  project_id?: string;
   session_id: string;
   worktree_name: string;
   worktree_branch: string;
   worktree_directory: string;
-  opencode_project_id?: string;
-  opencode_sandbox_name?: string;
 };
 
 type ModelConfig = {
@@ -66,7 +63,7 @@ const ALLOW_ALL_PERMISSIONS: PermissionRuleset = [
   },
 ];
 
-type ValidationEventHooks = {
+export type ValidationEventHooks = {
   onStarted?: (
     payload: UltrafeedEventData<"validate_issue_started">,
   ) => Promise<void> | void;
@@ -184,8 +181,6 @@ export async function runIssueValidation(input: {
       worktreeName: worktree.name,
       worktreeBranch: worktree.branch,
       worktreeDirectory: worktree.directory,
-      opencodeProjectId: session.projectID,
-      opencodeSandboxName: worktree.name,
     });
 
     await input.hooks?.onStarted?.({
@@ -243,6 +238,7 @@ export async function runIssueValidation(input: {
   } catch (error) {
     await Promise.resolve(
       input.hooks?.onFailed?.({
+        provider: "opencode",
         issue_key: issueKey,
         error: toErrorMessage(error),
       }),
@@ -509,6 +505,7 @@ function toValidationEventIdentifiers(
   input: ValidationIdentifiers,
 ): ValidationEventIdentifiers {
   return {
+    provider: "opencode",
     issue_key: input.issueKey,
     project_key: input.projectKey,
     project_name: input.projectName,
@@ -517,8 +514,6 @@ function toValidationEventIdentifiers(
     worktree_name: input.worktreeName,
     worktree_branch: input.worktreeBranch,
     worktree_directory: input.worktreeDirectory,
-    opencode_project_id: input.opencodeProjectId,
-    opencode_sandbox_name: input.opencodeSandboxName,
   };
 }
 

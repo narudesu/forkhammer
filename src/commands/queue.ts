@@ -188,9 +188,17 @@ function toParsedQueueEvent(event: UltrafeedEvent): ParsedQueueEvent | null {
     return null;
   }
 
+  const request = parseUltrafeedEventData(
+    "validate_issue_requested",
+    event.data,
+  );
+  if (!request) {
+    return null;
+  }
+
   return {
     ...event,
-    data,
+    data: request as UltrafeedEventData<"validate_issue_requested">,
   };
 }
 

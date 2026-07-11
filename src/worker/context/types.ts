@@ -9,6 +9,7 @@ import type {
   UnknownHydratableStore,
 } from "src/worker/snapshot/effector-snapshots";
 import type { UltrafeedWriter } from "src/worker/ultrafeed-writer";
+import type { ValidationProvider } from "src/worker/events";
 
 export interface WorkerContext {
   workerConfig: WorkerConfig;
@@ -31,7 +32,10 @@ export interface WorkerLogger {
 }
 
 export interface WorkerValidation {
-  runIssueValidation: (input: { key: string }) => Promise<void>;
+  runIssueValidation: (input: {
+    key: string;
+    provider: ValidationProvider;
+  }) => Promise<void>;
   runIssuePrompt: (input: {
     issueKey: string;
     requestEventId: string;

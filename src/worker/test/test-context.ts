@@ -69,6 +69,7 @@ export function createTestContext(
       }),
     } as WorkerContext["auth"],
     writer: {} as WorkerContext["writer"],
+    pi: {} as WorkerContext["pi"],
     stores: [],
     peerClient: {} as WorkerContext["peerClient"],
     validation: {} as WorkerContext["validation"],

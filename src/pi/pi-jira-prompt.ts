@@ -15,7 +15,10 @@ function buildValidationPrompt(context: string) {
 - Validate this Jira issue against the current codebase.
 - Prepare an implementation plan if the Jira context is clear enough.
 - If anything required to implement the issue is unclear, ask focused questions instead of guessing in the form of structured output questions.
-- Use the submit_implementation_plan tool to submit the plan
+- You must submit exactly one complete response through the submit_implementation_plan tool before finishing.
+- Do not only describe the plan in chat; the submitted tool payload is the validation result.
+
+IMPORTANT: we are just testing now, so do not read any files, just call the tool with some plausible texts based on the jira context
 
 ### Jira Context
 

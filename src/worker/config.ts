@@ -5,6 +5,7 @@ export interface WorkerConfig {
   jira: NonNullable<Config["jira"]>;
   supabase: NonNullable<Config["supabase"]>;
   worker: NonNullable<Config["worker"]>;
+  project: NonNullable<Config["project"]>;
 }
 
 export async function loadWorkerConfig(): Promise<WorkerConfig> {
@@ -20,5 +21,6 @@ export async function loadWorkerConfig(): Promise<WorkerConfig> {
     supabase: supabaseConfig,
     jira: jiraConfig,
     worker: config.worker,
+    project: config.project ?? {},
   };
 }
