@@ -98,13 +98,7 @@ export const PromptSessionResultSchema = Type.Object({
 
 export const SessionEventSchema = Type.Object({
   sessionPath: Type.String(),
-  type: Type.Union([
-    Type.Literal("user_message"),
-    Type.Literal("assistant_message"),
-    Type.Literal("tool_call"),
-  ]),
-  text: Type.Optional(Type.String()),
-  toolName: Type.Optional(Type.String()),
+  event: Type.Record(Type.String(), Type.Unknown()),
 });
 export const SubscribeSessionResultSchema = Type.Object({
   sessionPath: Type.String(),

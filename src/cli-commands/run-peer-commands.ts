@@ -44,8 +44,6 @@ export async function runPeerListSessions(
     console.log(`    Path: ${session.path}`);
     console.log(`    Modified: ${session.modifiedAt}`);
     console.log(`    Messages: ${session.messageCount}`);
-    if (session.firstMessage)
-      console.log(`    First message: ${session.firstMessage}`);
   }
 }
 

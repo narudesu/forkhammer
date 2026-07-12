@@ -4,6 +4,7 @@ import Peer, { type DataConnection } from "peerjs";
 import {
   PeerResolverMethod,
   type PeerResolverTarget,
+  type SessionEvent,
 } from "src/peer-protocol/peer-protocol";
 
 const log = debug("app:peer");
@@ -15,7 +16,7 @@ export interface PeerClient {
   disconnect(): void;
   request<T = unknown>(method: string, params?: unknown): Promise<T>;
   registerTarget(target: PeerResolverTarget): void;
-  onSessionEvent(handler: (event: unknown) => void): void;
+  onSessionEvent(handler: (event: SessionEvent) => void): void;
   onDisconnect(handler: () => void): void;
 }
 
@@ -28,7 +29,7 @@ export function createPeerClient(options?: {
   const createPeer = options?.createPeer ?? createPeerInstance;
   let activeConnection: DataConnection | null = null;
   const disconnectHandlers: Array<() => void> = [];
-  const sessionEventHandlers: Array<(event: unknown) => void> = [];
+  const sessionEventHandlers: Array<(event: SessionEvent) => void> = [];
   let pendingPeerId: string | null = null;
   let rpcClient: JSONRPCClient<void> | null = null;
   const rpcServer = new JSONRPCServer();
@@ -90,7 +91,8 @@ export function createPeerClient(options?: {
     const item = Array.isArray(payload) ? payload[0] : payload;
     if (item && "method" in item) {
       if (item.method === PeerResolverMethod.sessionEvent) {
-        for (const handler of sessionEventHandlers) handler(item.params);
+        for (const handler of sessionEventHandlers)
+          handler(item.params as SessionEvent);
         return;
       }
       const response = await rpcServer.receive(payload as never);
@@ -178,7 +180,7 @@ export function createPeerClient(options?: {
     );
   }
 
-  function onSessionEvent(handler: (event: unknown) => void): void {
+  function onSessionEvent(handler: (event: SessionEvent) => void): void {
     sessionEventHandlers.push(handler);
   }
 

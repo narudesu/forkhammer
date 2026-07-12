@@ -11,6 +11,7 @@ import type { SubmitImplementationPlanTool } from "src/pi/tools/submit-implement
 
 export abstract class PiSessionGateway {
   abstract session: AgentSession;
+  abstract init(): Promise<void>;
 
   static async create(opts: {
     directory: string;
@@ -30,6 +31,12 @@ export abstract class PiSessionGateway {
 
     await resourceLoader.reload();
 
+    const model = getBuiltinModel(
+      // @ts-expect-error
+      opts.agentConfig?.default_provider_id ?? "openai-codex",
+      opts.agentConfig?.default_model_id ?? "gpt-5.6-luna",
+    );
+
     const { session } = await createAgentSession({
       thinkingLevel: "medium",
       tools: ["read", "grep", "find", "ls", opts?.planTool?.toolName].filter(
@@ -39,15 +46,14 @@ export abstract class PiSessionGateway {
       cwd,
       resourceLoader,
       sessionManager: opts.sessionManager,
-      model: getBuiltinModel(
-        // @ts-expect-error
-        opts.agentConfig?.default_provider_id ?? "openai-codex",
-        opts.agentConfig?.default_model_id ?? "gpt-5.6-luna",
-      ),
+      model,
     });
 
     return {
       session,
+      async init() {
+        await session.prompt("Hi.");
+      },
     };
   }
 }
