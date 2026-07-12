@@ -78,6 +78,7 @@ export const CreateWorktreeResultSchema = Type.Object({
 
 export const CreateSessionParamsSchema = Type.Object({
   worktreePath: Type.String({ minLength: 1 }),
+  name: Type.Optional(Type.String({ minLength: 1 })),
 });
 export const CreateSessionResultSchema = Type.Object({
   path: Type.String(),
@@ -90,7 +91,12 @@ export const SessionPathParamsSchema = Type.Object({
 });
 export const PromptSessionParamsSchema = Type.Intersect([
   SessionPathParamsSchema,
-  Type.Object({ prompt: Type.String({ minLength: 1 }) }),
+  Type.Object({
+    prompt: Type.String({ minLength: 1 }),
+    mode: Type.Optional(
+      Type.Union([Type.Literal("read"), Type.Literal("write")]),
+    ),
+  }),
 ]);
 export const PromptSessionResultSchema = Type.Object({
   sessionPath: Type.String(),
@@ -129,6 +135,7 @@ export type CreateWorktreeResult = Static<typeof CreateWorktreeResultSchema>;
 export type CreateSessionParams = Static<typeof CreateSessionParamsSchema>;
 export type CreateSessionResult = Static<typeof CreateSessionResultSchema>;
 export type SessionPathParams = Static<typeof SessionPathParamsSchema>;
+export type PromptSessionMode = "read" | "write";
 export type PromptSessionParams = Static<typeof PromptSessionParamsSchema>;
 export type PromptSessionResult = Static<typeof PromptSessionResultSchema>;
 export type SessionEvent = Static<typeof SessionEventSchema>;

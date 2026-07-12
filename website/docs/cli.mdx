@@ -76,8 +76,9 @@ The `peer` commands use the same resolver target as the PeerJS API. In addition 
 
 ```sh
 forkhammer peer create-worktree <project> <name>
-forkhammer peer create-session <worktree-path>
+forkhammer peer create-session <worktree-path> --name "Refactor auth module"
 forkhammer peer prompt-session <session-path> "Inspect the current changes"
+forkhammer peer prompt-session <session-path> "Implement the fix" --mode write
 forkhammer peer subscribe-session <session-path>
 forkhammer peer archive-session <session-path>
 ```

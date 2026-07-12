@@ -12,6 +12,8 @@ import type {
   ListWorktreesResult,
   PeerResolverTarget,
   Project,
+  PromptSessionMode,
+  SessionEvent,
 } from "src/peer-protocol/peer-protocol";
 import { resolvePiSessionDir } from "src/pi/pi-agent-dir";
 import { PiSessionGateway } from "src/pi/pi-session";
@@ -33,6 +35,8 @@ export function createPeerResolverTarget(
     {
       unsubscribe: () => void;
       session: Awaited<ReturnType<typeof PiSessionGateway.create>>["session"];
+      mode: PromptSessionMode;
+      onEvent?: (event: SessionEvent) => void;
     }
   >();
 
@@ -178,6 +182,7 @@ export function createPeerResolverTarget(
       const sessionPath = manager.getSessionFile();
 
       if (!sessionPath) throw new Error("session-file-not-created");
+      if (params.name) manager.appendSessionInfo(params.name);
 
       const sessionGw = await PiSessionGateway.create({
         directory: manager.getCwd(),
@@ -202,6 +207,7 @@ export function createPeerResolverTarget(
           directory: manager.getCwd(),
           agentConfig: context.workerConfig.agent,
           sessionManager: manager,
+          mode: "read",
         })
       ).session;
       const unsubscribe = session.subscribe((event) => {
@@ -212,7 +218,12 @@ export function createPeerResolverTarget(
           });
         }
       });
-      subscriptions.set(params.sessionPath, { unsubscribe, session });
+      subscriptions.set(params.sessionPath, {
+        unsubscribe,
+        session,
+        mode: "read",
+        onEvent,
+      });
       return { sessionPath: params.sessionPath, subscribed: true };
     },
 
@@ -230,19 +241,42 @@ export function createPeerResolverTarget(
     },
 
     async promptSession(params) {
+      const mode = params.mode ?? "read";
       let subscription = subscriptions.get(params.sessionPath);
       let ownedSession = false;
-      if (!subscription) {
+      if (!subscription || subscription.mode !== mode) {
+        const previous = subscription;
         const manager = SessionManager.open(params.sessionPath);
         const session = (
           await PiSessionGateway.create({
             directory: manager.getCwd(),
             agentConfig: context.workerConfig.agent,
             sessionManager: manager,
+            mode,
           })
         ).session;
-        subscription = { unsubscribe: () => {}, session };
-        ownedSession = true;
+        if (previous) {
+          previous.unsubscribe();
+          previous.session.dispose();
+          const unsubscribe = session.subscribe((event) => {
+            if (event.type === "message_end") {
+              previous.onEvent?.({
+                sessionPath: params.sessionPath,
+                event: { message: event.message },
+              });
+            }
+          });
+          subscription = {
+            unsubscribe,
+            session,
+            mode,
+            onEvent: previous.onEvent,
+          };
+          subscriptions.set(params.sessionPath, subscription);
+        } else {
+          subscription = { unsubscribe: () => {}, session, mode };
+          ownedSession = true;
+        }
       }
       try {
         await subscription.session.prompt(params.prompt);

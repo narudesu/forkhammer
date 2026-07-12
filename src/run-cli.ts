@@ -68,6 +68,7 @@ async function runCli() {
   peer
     .command("create-session <worktree-path>")
     .description("Create a persistent PI session")
+    .option("--name <name>", "Set the session display name")
     .action(runPeerCreateSession);
 
   peer
@@ -78,6 +79,7 @@ async function runCli() {
   peer
     .command("prompt-session <session-path> <prompt>")
     .description("Send a one-shot prompt to a PI session")
+    .option("--mode <mode>", "tool mode: read or write", "read")
     .action(runPeerPromptSession);
 
   peer

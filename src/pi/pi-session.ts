@@ -8,6 +8,7 @@ import {
 import type { Config } from "src/config/config";
 import { resolvePiAgentDir } from "src/pi/pi-agent-dir";
 import type { SubmitImplementationPlanTool } from "src/pi/tools/submit-implementation-plan-tool";
+import type { PromptSessionMode } from "src/peer-protocol/peer-protocol";
 
 export abstract class PiSessionGateway {
   abstract session: AgentSession;
@@ -18,6 +19,7 @@ export abstract class PiSessionGateway {
     agentConfig?: Config["agent"];
     planTool?: SubmitImplementationPlanTool;
     sessionManager?: SessionManager;
+    mode?: PromptSessionMode;
   }): Promise<PiSessionGateway> {
     const cwd = opts.directory;
 
@@ -39,9 +41,15 @@ export abstract class PiSessionGateway {
 
     const { session } = await createAgentSession({
       thinkingLevel: "medium",
-      tools: ["read", "grep", "find", "ls", opts?.planTool?.toolName].filter(
-        (item) => item != null,
-      ),
+      // An explicit allowlist preserves Forkhammer's read-only default. In
+      // write mode, omitting it lets Pi enable every built-in and extension
+      // tool.
+      tools:
+        opts.mode === "write"
+          ? undefined
+          : ["read", "grep", "find", "ls", opts?.planTool?.toolName].filter(
+              (item) => item != null,
+            ),
       agentDir,
       cwd,
       resourceLoader,

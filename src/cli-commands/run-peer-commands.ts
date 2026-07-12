@@ -3,6 +3,7 @@ import {
   createPeerResolverTarget,
   type PeerResolverTarget,
 } from "src/peer-protocol/peer-resolver";
+import type { PromptSessionMode } from "src/peer-protocol/peer-protocol";
 import { loadWorkerConfig } from "src/worker/config";
 import { createWorkerContext } from "src/worker/context";
 
@@ -60,8 +61,12 @@ export async function runPeerCreateWorktree(
 
 export async function runPeerCreateSession(
   worktreePath: string,
+  options: { name?: string } = {},
 ): Promise<void> {
-  const result = await (await loadPeerTarget()).createSession({ worktreePath });
+  const result = await (await loadPeerTarget()).createSession({
+    worktreePath,
+    name: options.name,
+  });
   console.log(chalk.green(`Created session: ${result.path}`));
 }
 
@@ -75,8 +80,13 @@ export async function runPeerArchiveSession(
 export async function runPeerPromptSession(
   sessionPath: string,
   prompt: string,
+  options: { mode?: PromptSessionMode } = {},
 ): Promise<void> {
-  await (await loadPeerTarget()).promptSession({ sessionPath, prompt });
+  await (await loadPeerTarget()).promptSession({
+    sessionPath,
+    prompt,
+    mode: options.mode,
+  });
   console.log(chalk.green(`Prompt completed: ${sessionPath}`));
 }
 
