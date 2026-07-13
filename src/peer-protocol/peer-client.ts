@@ -151,6 +151,10 @@ export function createPeerClient(options?: {
     rpcServer.addMethod(PeerResolverMethod.listSessions, (params) =>
       target.listSessions(params as never),
     );
+    rpcServer.addMethod(
+      PeerResolverMethod.listRecentProjectSessions,
+      (params) => target.listRecentProjectSessions(params as never),
+    );
     rpcServer.addMethod(PeerResolverMethod.getSession, (params) =>
       target.getSession(params as never),
     );

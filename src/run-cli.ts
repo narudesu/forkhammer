@@ -6,6 +6,7 @@ import {
   runPeerCreateWorktree,
   runPeerGetConfig,
   runPeerGetSession,
+  runPeerListRecentProjectSessions,
   runPeerListSessions,
   runPeerListWorktrees,
   runPeerPromptSession,
@@ -54,6 +55,11 @@ async function runCli() {
     .command("list-sessions <project> <worktree-path>")
     .description("List PI sessions for a worktree")
     .action(runPeerListSessions);
+
+  peer
+    .command("list-recent-project-sessions <project>")
+    .description("List recent PI sessions across all project worktrees")
+    .action(runPeerListRecentProjectSessions);
 
   peer
     .command("get-session <session-path>")

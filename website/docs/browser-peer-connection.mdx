@@ -27,6 +27,7 @@ The worker exposes these methods:
 - `get-config`
 - `list-worktrees`
 - `list-sessions`
+- `list-recent-project-sessions`
 - `get-session`
 - `create-worktree`
 - `create-session`
@@ -34,6 +35,8 @@ The worker exposes these methods:
 - `unsubscribe-session`
 - `archive-session`
 - `prompt-session`
+
+`list-recent-project-sessions` accepts `{ project }` and returns `{ project, sessions }`. It aggregates all worktrees and orders sessions newest-first; each session's `cwd` identifies its worktree.
 
 A request has an `id`, and its response uses the same ID:
 

@@ -22,6 +22,7 @@ export const SessionSummarySchema = Type.Object({
   name: Type.Optional(Type.String()),
   messageCount: Type.Number(),
   firstMessage: Type.Optional(Type.String()),
+  active: Type.Boolean(),
 });
 
 export const SessionEntrySchema = Type.Intersect([
@@ -56,6 +57,14 @@ export const ListSessionsResultSchema = Type.Object({
   sessions: Type.Array(SessionSummarySchema),
 });
 
+export const ListRecentProjectSessionsParamsSchema = Type.Object({
+  project: Type.String({ minLength: 1 }),
+});
+export const ListRecentProjectSessionsResultSchema = Type.Object({
+  project: Type.String(),
+  sessions: Type.Array(SessionSummarySchema),
+});
+
 export const GetSessionParamsSchema = Type.Object({
   sessionPath: Type.String({ minLength: 1 }),
 });
@@ -63,6 +72,7 @@ export const GetSessionResultSchema = Type.Object({
   path: Type.String(),
   id: Type.Optional(Type.String()),
   messages: Type.Array(SessionEntrySchema),
+  active: Type.Boolean(),
 });
 
 export const CreateWorktreeParamsSchema = Type.Object({
@@ -102,9 +112,21 @@ export const PromptSessionResultSchema = Type.Object({
   sessionPath: Type.String(),
 });
 
+const SessionEventPayloadSchema = Type.Union([
+  // Session entries are forwarded unchanged by the worker.
+  Type.Object({
+    // raw message received from the message end event
+    message: Type.Unknown(),
+  }),
+  Type.Object({
+    type: Type.Literal("active_changed"),
+    active: Type.Boolean(),
+  }),
+]);
+
 export const SessionEventSchema = Type.Object({
   sessionPath: Type.String(),
-  event: Type.Record(Type.String(), Type.Unknown()),
+  event: SessionEventPayloadSchema,
 });
 export const SubscribeSessionResultSchema = Type.Object({
   sessionPath: Type.String(),
@@ -128,6 +150,12 @@ export type ListWorktreesParams = Static<typeof ListWorktreesParamsSchema>;
 export type ListWorktreesResult = Static<typeof ListWorktreesResultSchema>;
 export type ListSessionsParams = Static<typeof ListSessionsParamsSchema>;
 export type ListSessionsResult = Static<typeof ListSessionsResultSchema>;
+export type ListRecentProjectSessionsParams = Static<
+  typeof ListRecentProjectSessionsParamsSchema
+>;
+export type ListRecentProjectSessionsResult = Static<
+  typeof ListRecentProjectSessionsResultSchema
+>;
 export type GetSessionParams = Static<typeof GetSessionParamsSchema>;
 export type GetSessionResult = Static<typeof GetSessionResultSchema>;
 export type CreateWorktreeParams = Static<typeof CreateWorktreeParamsSchema>;
@@ -151,6 +179,7 @@ export const PeerResolverMethod = {
   getConfig: "get-config",
   listWorktrees: "list-worktrees",
   listSessions: "list-sessions",
+  listRecentProjectSessions: "list-recent-project-sessions",
   getSession: "get-session",
   createWorktree: "create-worktree",
   createSession: "create-session",
@@ -169,6 +198,9 @@ export interface PeerResolverTarget {
   getConfig(): Promise<GetConfigResult>;
   listWorktrees(params: ListWorktreesParams): Promise<ListWorktreesResult>;
   listSessions(params: ListSessionsParams): Promise<ListSessionsResult>;
+  listRecentProjectSessions(
+    params: ListRecentProjectSessionsParams,
+  ): Promise<ListRecentProjectSessionsResult>;
   getSession(params: GetSessionParams): Promise<GetSessionResult>;
   createWorktree(params: CreateWorktreeParams): Promise<CreateWorktreeResult>;
   createSession(params: CreateSessionParams): Promise<CreateSessionResult>;
@@ -186,6 +218,7 @@ export interface PeerResolverTarget {
 export type PeerResolverParams =
   | ListWorktreesParams
   | ListSessionsParams
+  | ListRecentProjectSessionsParams
   | GetSessionParams
   | CreateWorktreeParams
   | CreateSessionParams

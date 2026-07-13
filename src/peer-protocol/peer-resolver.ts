@@ -6,6 +6,8 @@ import { execa } from "execa";
 import type {
   GetConfigResult,
   GetSessionResult,
+  ListRecentProjectSessionsParams,
+  ListRecentProjectSessionsResult,
   ListSessionsParams,
   ListSessionsResult,
   ListWorktreesParams,
@@ -30,29 +32,51 @@ export abstract class PeerResolver {
 export function createPeerResolverTarget(
   context: WorkerContext,
 ): PeerResolverTarget {
+  type AgentSession = Awaited<
+    ReturnType<typeof PiSessionGateway.create>
+  >["session"];
+  const sessions = new Map<string, AgentSession>();
   const subscriptions = new Map<
     string,
     {
       unsubscribe: () => void;
-      session: Awaited<ReturnType<typeof PiSessionGateway.create>>["session"];
+      session: AgentSession;
       mode: PromptSessionMode;
       onEvent?: (event: SessionEvent) => void;
+      lastActive: boolean;
     }
   >();
+
+  function isSessionActive(sessionPath: string): boolean {
+    return sessions.get(sessionPath)?.isStreaming ?? false;
+  }
+
+  function emitActiveChange(
+    subscription: (typeof subscriptions extends Map<string, infer T> ? T : never),
+    sessionPath: string,
+  ): void {
+    const active = subscription.session.isStreaming;
+    if (active === subscription.lastActive) return;
+    subscription.lastActive = active;
+    subscription.onEvent?.({
+      sessionPath,
+      event: { type: "active_changed", active },
+    });
+  }
 
   async function unsubscribeSession(sessionPath: string): Promise<boolean> {
     const subscription = subscriptions.get(sessionPath);
     if (!subscription) return false;
+    // Detach event delivery, but let any in-flight prompt continue running.
     subscription.unsubscribe();
-    subscription.session.dispose();
     subscriptions.delete(sessionPath);
     return true;
   }
 
   function dispose(): void {
     for (const subscription of subscriptions.values()) {
+      // Disconnecting the peer stops event delivery without cancelling sessions.
       subscription.unsubscribe();
-      subscription.session.dispose();
     }
     subscriptions.clear();
   }
@@ -105,8 +129,51 @@ export function createPeerResolverTarget(
           name: session.name,
           messageCount: session.messageCount,
           firstMessage: session.firstMessage || undefined,
+          active: isSessionActive(session.path),
         })),
       };
+    },
+
+    async listRecentProjectSessions(
+      params: ListRecentProjectSessionsParams,
+    ): Promise<ListRecentProjectSessionsResult> {
+      const project = getProject(context, params.project);
+      const result = await execa("git", [
+        "-C",
+        project.root,
+        "worktree",
+        "list",
+        "--porcelain",
+      ]);
+      const worktrees = parseWorktrees(result.stdout);
+      const sessions = (
+        await Promise.all(
+          worktrees.map((worktree) =>
+            SessionManager.list(
+              worktree.path,
+              resolvePiSessionDir(worktree.path),
+            ),
+          ),
+        )
+      )
+        .flat()
+        .map((session) => ({
+          path: session.path,
+          id: session.id,
+          cwd: session.cwd,
+          createdAt: session.created.toISOString(),
+          modifiedAt: session.modified.toISOString(),
+          name: session.name,
+          messageCount: session.messageCount,
+          firstMessage: session.firstMessage || undefined,
+          active: isSessionActive(session.path),
+        }))
+        .sort(
+          (left, right) =>
+            Date.parse(right.modifiedAt) - Date.parse(left.modifiedAt),
+        );
+
+      return { project: params.project, sessions };
     },
 
     async getSession(params): Promise<GetSessionResult> {
@@ -116,6 +183,7 @@ export function createPeerResolverTarget(
         path: params.sessionPath,
         id: header?.id,
         messages: manager.getEntries() as GetSessionResult["messages"],
+        active: isSessionActive(params.sessionPath),
       };
     },
 
@@ -202,28 +270,40 @@ export function createPeerResolverTarget(
     async subscribeSession(params, onEvent) {
       await unsubscribeSession(params.sessionPath);
       const manager = SessionManager.open(params.sessionPath);
-      const session = (
-        await PiSessionGateway.create({
-          directory: manager.getCwd(),
-          agentConfig: context.workerConfig.agent,
-          sessionManager: manager,
-          mode: "read",
-        })
-      ).session;
-      const unsubscribe = session.subscribe((event) => {
+      const session =
+        sessions.get(params.sessionPath) ??
+        (
+          await PiSessionGateway.create({
+            directory: manager.getCwd(),
+            agentConfig: context.workerConfig.agent,
+            sessionManager: manager,
+            mode: "read",
+          })
+        ).session;
+      sessions.set(params.sessionPath, session);
+      const subscription = {
+        unsubscribe: () => {},
+        session,
+        mode: "read" as const,
+        onEvent,
+        lastActive: session.isStreaming,
+      };
+      subscription.unsubscribe = session.subscribe((event) => {
         if (event.type === "message_end") {
           onEvent?.({
             sessionPath: params.sessionPath,
             event: { message: event.message },
           });
         }
+        if (
+          event.type === "agent_start" ||
+          event.type === "agent_end" ||
+          event.type === "agent_settled"
+        ) {
+          emitActiveChange(subscription, params.sessionPath);
+        }
       });
-      subscriptions.set(params.sessionPath, {
-        unsubscribe,
-        session,
-        mode: "read",
-        onEvent,
-      });
+      subscriptions.set(params.sessionPath, subscription);
       return { sessionPath: params.sessionPath, subscribed: true };
     },
 
@@ -255,26 +335,41 @@ export function createPeerResolverTarget(
             mode,
           })
         ).session;
+        sessions.set(params.sessionPath, session);
         if (previous) {
           previous.unsubscribe();
           previous.session.dispose();
-          const unsubscribe = session.subscribe((event) => {
+          const nextSubscription = {
+            unsubscribe: () => {},
+            session,
+            mode,
+            onEvent: previous.onEvent,
+            lastActive: session.isStreaming,
+          };
+          nextSubscription.unsubscribe = session.subscribe((event) => {
             if (event.type === "message_end") {
               previous.onEvent?.({
                 sessionPath: params.sessionPath,
                 event: { message: event.message },
               });
             }
+            if (
+              event.type === "agent_start" ||
+              event.type === "agent_end" ||
+              event.type === "agent_settled"
+            ) {
+              emitActiveChange(nextSubscription, params.sessionPath);
+            }
           });
-          subscription = {
-            unsubscribe,
-            session,
-            mode,
-            onEvent: previous.onEvent,
-          };
+          subscription = nextSubscription;
           subscriptions.set(params.sessionPath, subscription);
         } else {
-          subscription = { unsubscribe: () => {}, session, mode };
+          subscription = {
+            unsubscribe: () => {},
+            session,
+            mode,
+            lastActive: session.isStreaming,
+          };
           ownedSession = true;
         }
       }
@@ -282,7 +377,10 @@ export function createPeerResolverTarget(
         await subscription.session.prompt(params.prompt);
         return { sessionPath: params.sessionPath };
       } finally {
-        if (ownedSession) subscription.session.dispose();
+        if (ownedSession) {
+          subscription.session.dispose();
+          sessions.delete(params.sessionPath);
+        }
       }
     },
   };

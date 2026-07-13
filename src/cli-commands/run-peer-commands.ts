@@ -1,9 +1,9 @@
 import chalk from "chalk";
+import type { PromptSessionMode } from "src/peer-protocol/peer-protocol";
 import {
   createPeerResolverTarget,
   type PeerResolverTarget,
 } from "src/peer-protocol/peer-resolver";
-import type { PromptSessionMode } from "src/peer-protocol/peer-protocol";
 import { loadWorkerConfig } from "src/worker/config";
 import { createWorkerContext } from "src/worker/context";
 
@@ -43,6 +43,22 @@ export async function runPeerListSessions(
   for (const session of result.sessions) {
     console.log(`  ${session.name ?? session.id}`);
     console.log(`    Path: ${session.path}`);
+    console.log(`    Modified: ${session.modifiedAt}`);
+    console.log(`    Messages: ${session.messageCount}`);
+  }
+}
+
+export async function runPeerListRecentProjectSessions(
+  project: string,
+): Promise<void> {
+  const result = await (await loadPeerTarget()).listRecentProjectSessions({
+    project,
+  });
+  console.log(chalk.green(`Recent sessions for ${result.project}:`));
+  for (const session of result.sessions) {
+    console.log(`  ${session.name ?? session.id}`);
+    console.log(`    Path: ${session.path}`);
+    console.log(`    Worktree: ${session.cwd}`);
     console.log(`    Modified: ${session.modifiedAt}`);
     console.log(`    Messages: ${session.messageCount}`);
   }
