@@ -14,6 +14,7 @@ const zValidationSessionContext = z.object({
   issue_key: zIssueKey,
   project_key: z.string().min(1),
   project_name: z.string().min(1),
+  project_id: z.string().min(1).optional(),
   session_id: z.string().min(1),
   worktree_name: z.string().min(1),
   worktree_branch: z.string().min(1),
@@ -43,8 +44,15 @@ const zValidateIssueRequestedData = z.object({
   issue_key: zIssueKey,
 });
 
+const zArtifactType = z.enum([
+  "jira_inbox",
+  "gitlab",
+  "healthcheck",
+  "blocker",
+]);
+
 const zArtifactRefreshRequestedData = z.object({
-  type: z.literal("jira_inbox"),
+  type: zArtifactType,
 });
 
 const zValidateIssueStartedData = z.object({
@@ -90,7 +98,7 @@ export const browserPeerReadyEventSchema = z.object({
 });
 
 const zInsertedArtifactData = z.object({
-  artifactType: z.string().nullish(),
+  artifactType: zArtifactType.nullish(),
   artifactId: z.string(),
 });
 

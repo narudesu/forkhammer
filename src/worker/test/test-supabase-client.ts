@@ -65,6 +65,24 @@ function createTestSupabaseTable(
       state.rows.push(...rows);
       return { data: rows, error: null };
     },
+    upsert: async (rows: unknown[]) => {
+      state.inserts.push({ table, rows });
+      for (const row of rows) {
+        const record = row as Record<string, unknown>;
+        const existingIndex = state.rows.findIndex((candidate) => {
+          const existing = candidate as Record<string, unknown>;
+          return (
+            existing.user_id === record.user_id && existing.type === record.type
+          );
+        });
+        if (existingIndex >= 0) {
+          state.rows[existingIndex] = row;
+        } else {
+          state.rows.push(row);
+        }
+      }
+      return { data: rows, error: null };
+    },
     select: () => createSelectQuery(state.rows),
     delete: () => createDeleteQuery(table, state.deletes),
   };

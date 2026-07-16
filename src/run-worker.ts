@@ -1,4 +1,4 @@
-import { hydratableArtifactStore } from "src/worker/jira-artifact/jira-artifact-store";
+import { hydratableOperationsArtifactStore } from "src/worker/operations-artifact/operations-artifact-store";
 import { hydratablePeerStore } from "src/worker/peer/peer-store";
 import { asUnknown } from "src/worker/snapshot/effector-snapshots";
 import { hydratableValidationStore } from "src/worker/stores/validation-store";
@@ -12,7 +12,7 @@ export async function runWorker() {
 
   const workerConfig = await loadWorkerConfig();
   const ctx = createWorkerContext(workerConfig, [
-    asUnknown(hydratableArtifactStore),
+    asUnknown(hydratableOperationsArtifactStore),
     asUnknown(hydratablePeerStore),
     asUnknown(hydratableValidationStore),
   ]);

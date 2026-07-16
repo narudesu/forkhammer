@@ -33,6 +33,25 @@ directory = "/home/you/.local/share/forkhammer/snapshots"
 key = "KEY"
 root = "/home/you/code/forkhammer/your-repo"
 
+[gitlab]
+url = "https://gitlab.example.com"
+token = "<private-token>"
+
+[gitlab.projects.frontend]
+id = "group/frontend"
+branches = ["main", "staging", "production"]
+
+[gitlab.projects.backend]
+id = "group/backend"
+branches = ["main", "staging", "production"]
+
+[blockers]
+file = "/home/you/.config/forkhammer/blockers.toml"
+
+[healthchecks.app]
+name = "App"
+url = "https://app.example.com/health"
+
 [supabase]
 url = "https://<project-ref>.supabase.co"
 anon_key = "<anon-key>"

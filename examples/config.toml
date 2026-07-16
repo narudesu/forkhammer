@@ -30,6 +30,26 @@ key = "KEY"
 # root is the path to the project directory
 root = "/home/you/code/forkhammer/my-project"
 
+[gitlab]
+# GitLab API setup
+url = "https://gitlab.example.com"
+token = "<private-token>"
+
+[gitlab.projects.frontend]
+id = "group/frontend"
+branches = ["main", "staging", "production"]
+
+[gitlab.projects.backend]
+id = "group/backend"
+branches = ["main", "staging", "production"]
+
+[blockers]
+file = "/home/you/.config/forkhammer/blockers.toml"
+
+[healthchecks.app]
+name = "App"
+url = "https://app.example.com/health"
+
 # supabase setup
 [supabase]
 

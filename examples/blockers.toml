@@ -1,0 +1,39 @@
+# Manually maintained blockers for the Forkhammer dashboard.
+# A blocker remains unresolved until its entry is removed from this file.
+#
+# Identifiers must use lowercase snake_case. Ticket teams must be "fe" or "be".
+
+[blockers.document_management]
+title = "Document management feature"
+comments = [
+  "Waiting for the API shape to be finalized.",
+  "Confirm the migration plan before implementation starts.",
+]
+
+[[blockers.document_management.blocked_tickets]]
+team = "fe"
+url = "https://your-company.atlassian.net/browse/PROJ-123"
+
+[[blockers.document_management.blocking_tickets]]
+team = "be"
+url = "https://your-company.atlassian.net/browse/PROJ-124"
+
+[blockers.payment_webhooks]
+title = "Payment webhook reliability"
+comments = [
+  "The provider retry behavior still needs to be verified in staging.",
+]
+
+[[blockers.payment_webhooks.blocked_tickets]]
+team = "fe"
+url = "https://your-company.atlassian.net/browse/PROJ-125"
+
+# Add more entries using the same shape, for example:
+#
+# [blockers.short_lowercase_identifier]
+# title = "A short description of the blocker"
+# comments = ["Useful context for the team."]
+#
+# [[blockers.short_lowercase_identifier.blocked_tickets]]
+# team = "be"
+# url = "https://your-company.atlassian.net/browse/PROJ-126"

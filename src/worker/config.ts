@@ -7,6 +7,9 @@ export interface WorkerConfig {
   agent?: Config["agent"];
   worker: NonNullable<Config["worker"]>;
   project: NonNullable<Config["project"]>;
+  gitlab?: Config["gitlab"];
+  blockers?: Config["blockers"];
+  healthchecks?: Config["healthchecks"];
 }
 
 export async function loadWorkerConfig(): Promise<WorkerConfig> {
@@ -24,5 +27,8 @@ export async function loadWorkerConfig(): Promise<WorkerConfig> {
     jira: jiraConfig,
     worker: config.worker,
     project: config.project ?? {},
+    gitlab: config.gitlab,
+    blockers: config.blockers,
+    healthchecks: config.healthchecks,
   };
 }

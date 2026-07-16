@@ -53,12 +53,22 @@ The endpoint must:
 
 Forkhammer reads and writes event rows from the configured table. The default table name is `ultrafeed_item`.
 
-At minimum, the table must expose the columns the worker reads today:
+At minimum, the event table must expose the columns the worker reads today:
 
 - `id - uuid`
 - `created_at - timestampz`
 - `event_type - string`
 - `data - jsonb`
+
+The worker also writes a `user_artifacts` table for current dashboard snapshots:
+
+- `id - uuid`
+- `user_id - uuid/string`
+- `type - string` (`jira`, `gitlab`, `healthcheck`, or `blocker`)
+- `content - jsonb`
+- `created_at - timestampz` (recommended)
+
+Add a unique constraint on `(user_id, type)`. Refreshing an artifact upserts that user/type row, so only one current snapshot exists for each user and artifact type. Failed refreshes do not replace the previous valid snapshot.
 
 ## Realtime
 

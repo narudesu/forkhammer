@@ -37,7 +37,11 @@ async function initializeFeedChannel(
     (payload) => {
       const event = payload.new as UltrafeedEvent;
 
-      ctx.log.debug("realtime insert received %s", event.id);
+      ctx.log.debug(
+        "realtime insert received %s - %s",
+        event.event_type,
+        event.id,
+      );
 
       opts.onEvent(event);
     },

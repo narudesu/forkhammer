@@ -9,6 +9,11 @@ const zProjectConfig = z.object({
   key: z.string().optional(),
 });
 
+const zGitlabProjectConfig = z.object({
+  id: z.string().min(1),
+  branches: z.array(z.string().min(1)).min(1),
+});
+
 const zConfig = z.object({
   agent: z
     .object({
@@ -30,6 +35,27 @@ const zConfig = z.object({
         })
         .optional(),
     })
+    .optional(),
+  gitlab: z
+    .object({
+      url: z.url(),
+      token: z.string().min(1),
+      projects: z.object({
+        frontend: zGitlabProjectConfig,
+        backend: zGitlabProjectConfig,
+      }),
+    })
+    .optional(),
+  blockers: z
+    .object({
+      file: z.string().min(1),
+    })
+    .optional(),
+  healthchecks: z
+    .record(
+      z.string().regex(/^[a-z0-9]+(?:_[a-z0-9]+)*$/),
+      z.object({ name: z.string().min(1), url: z.url() }),
+    )
     .optional(),
   project: z.record(z.string(), zProjectConfig).optional(),
   worker: z.object({
@@ -53,10 +79,14 @@ const zConfig = z.object({
 
 export type Config = z.infer<typeof zConfig>;
 
+export function parseConfig(raw: string) {
+  return zConfig.parse(toml.parse(raw));
+}
+
 export async function loadConfig() {
   const filePath = configPath();
   const buffer = await fs.readFile(filePath);
-  return zConfig.parse(toml.parse(buffer.toString("utf-8")));
+  return parseConfig(buffer.toString("utf-8"));
 }
 
 function configDirectory() {

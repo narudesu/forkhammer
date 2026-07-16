@@ -22,21 +22,14 @@ describe("jira artifact store", () => {
   test("fetches and inserts the Jira artifact after a refresh request", async () => {
     const scope = fork();
     const testContext = TestWorkerContext.create({
-      jira: {
-        fakeIssues,
-      },
+      jira: { fakeIssues },
     });
     const ctx = testContext.getContext();
     const supabase = testContext.testSupabaseClient();
 
-    const initialState: JiraArtifactStoreState = {
-      isRefetchRequested: false,
-      cursor: null,
-    };
-
     await allSettled(hydratableArtifactStore.hydrationRequested, {
       scope,
-      params: initialState,
+      params: { isRefetchRequested: false, cursor: null },
     });
     await allSettled(feedEventReceived, {
       scope,
@@ -51,16 +44,16 @@ describe("jira artifact store", () => {
     expect(inserts).toHaveLength(2);
 
     const artifactInsert = inserts.find(
-      (insert) => insert.table === "jira_artifacts",
+      (insert) => insert.table === "user_artifacts",
     );
     const eventInsert = inserts.find((insert) => insert.table === "events");
-
     expect(artifactInsert?.rows).toHaveLength(1);
     expect(eventInsert?.rows).toHaveLength(1);
 
     const artifactRow = artifactInsert?.rows[0] as {
       id: string;
       user_id: string;
+      type: string;
       content: unknown;
     };
     const eventRow = eventInsert?.rows[0] as {
@@ -70,62 +63,25 @@ describe("jira artifact store", () => {
 
     expect(artifactRow).toMatchObject({
       user_id: "user-1",
+      type: "jira",
       content: fakeIssues,
     });
-    expect(typeof artifactRow.id).toBe("string");
-    expect(artifactRow.id.length).toBeGreaterThan(0);
+    expect(artifactRow.id).toBeString();
     expect(eventRow).toEqual({
       event_type: "inserted_artifact",
-      data: {
-        artifactType: "jira_inbox",
-        artifactId: artifactRow.id,
-      },
-    });
-    expect(scope.getState($jiraArtifactRequests)).toMatchObject({
-      isRefetchRequested: true,
-      cursor: {
-        id: artifactRefreshRequestedEvent.id,
-        created_at: artifactRefreshRequestedEvent.created_at,
-      },
+      data: { artifactType: "jira", artifactId: artifactRow.id },
     });
   });
 
-  test("deletes old Jira inbox artifacts after inserting a new one", async () => {
+  test("upserts the current Jira artifact without affecting other artifact types", async () => {
     const scope = fork();
     const testContext = TestWorkerContext.create({
-      jira: {
-        fakeIssues,
-      },
+      jira: { fakeIssues },
       supabase: {
         rows: {
-          events: [
-            {
-              event_type: "inserted_artifact",
-              data: {
-                artifactType: "jira_inbox",
-                artifactId: "old-jira-inbox-artifact",
-              },
-            },
-            {
-              event_type: "inserted_artifact",
-              data: {
-                artifactType: "other_artifact",
-                artifactId: "other-artifact",
-              },
-            },
-            {
-              event_type: "validate_issue_requested",
-              data: {
-                artifactType: "jira_inbox",
-                artifactId: "wrong-event-type-artifact",
-              },
-            },
-            {
-              event_type: "inserted_artifact",
-              data: {
-                artifactType: "jira_inbox",
-              },
-            },
+          user_artifacts: [
+            { id: "old-jira-artifact", user_id: "user-1", type: "jira" },
+            { id: "other-artifact", user_id: "user-1", type: "gitlab" },
           ],
         },
       },
@@ -151,24 +107,11 @@ describe("jira artifact store", () => {
 
     const artifactInsert = supabase
       .getInserts()
-      .find((insert) => insert.table === "jira_artifacts");
+      .find((insert) => insert.table === "user_artifacts");
     const artifactRow = artifactInsert?.rows[0] as { id: string };
 
-    expect(supabase.getDeletes()).toEqual([
-      {
-        table: "jira_artifacts",
-        filters: [
-          {
-            type: "in",
-            column: "id",
-            value: ["old-jira-inbox-artifact"],
-          },
-        ],
-      },
-    ]);
-    expect(supabase.getDeletes()[0]?.filters[0]?.value).not.toContain(
-      artifactRow.id,
-    );
+    expect(artifactRow.id).toBeString();
+    expect(supabase.getDeletes()).toEqual([]);
   });
 });
 
@@ -176,5 +119,5 @@ const artifactRefreshRequestedEvent: UltrafeedEvent = {
   id: "event-1",
   created_at: "2026-01-01T00:00:00.000Z",
   event_type: "artifact_refresh_requested",
-  data: {},
+  data: { type: "jira" },
 };
