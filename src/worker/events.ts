@@ -93,6 +93,17 @@ const zBrowserPeerReadyData = z.object({
   peerId: z.string().min(1),
 });
 
+export const browserRealtimeReadyEventSchema = z.object({
+  connectionId: z.uuid(),
+  channelName: z
+    .string()
+    .regex(/^forkhammer-worker-[0-9a-f-]{36}-[0-9a-f-]{36}$/i),
+  transport: z.literal("realtime"),
+  expiresAt: z.iso.datetime(),
+});
+
+const zBrowserRealtimeReadyData = browserRealtimeReadyEventSchema;
+
 export const browserPeerReadyEventSchema = z.object({
   peerId: z.string().min(1),
 });
@@ -152,6 +163,12 @@ export const ultrafeedEventDefinitions = [
     dataSchema: zBrowserPeerReadyData,
   },
   {
+    eventType: "browser_realtime_ready",
+    description:
+      "A browser is connected via a private Supabase Realtime channel.",
+    dataSchema: zBrowserRealtimeReadyData,
+  },
+  {
     eventType: "artifact_refresh_requested",
     description: "A request to refresh a Jira inbox artifact snapshot.",
     dataSchema: zArtifactRefreshRequestedData,
@@ -167,6 +184,7 @@ export const ultrafeedEventSchemas = {
   issue_validated: zIssueValidatedData,
   issue_validation_failed: zIssueValidationFailedData,
   browser_peer_ready: zBrowserPeerReadyData,
+  browser_realtime_ready: zBrowserRealtimeReadyData,
   artifact_refresh_requested: zArtifactRefreshRequestedData,
   inserted_artifact: zInsertedArtifactData,
 } as const;

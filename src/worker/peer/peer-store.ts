@@ -11,6 +11,7 @@ import {
   createPeerResolverTarget,
   PeerResolver,
 } from "src/peer-protocol/peer-resolver";
+import type { PeerConnection } from "src/peer-protocol/peer-client";
 import type { WorkerContext } from "src/worker/context/types";
 import { parseUltrafeedEventData } from "src/worker/events";
 import { reconcileRequested } from "src/worker/events/store-events";
@@ -24,12 +25,14 @@ const log = debug("app:peer");
 
 export type PeerStoreState = {
   pendingPeerId: string | null;
+  pendingConnection: Extract<PeerConnection, { transport: "realtime" }> | null;
   sessionIssueKeys: Record<string, string>;
   cursor: EventCursor | null;
 };
 
 type PeerRuntimeStoreState = {
   activePeerId: string | null;
+  activeConnectionId: string | null;
   sessionIssueKeys: Record<string, string>;
   sessionAgents: Record<string, {}>;
 };
@@ -37,6 +40,7 @@ type PeerRuntimeStoreState = {
 export const $peerStore = createStore<PeerStoreState>(
   {
     pendingPeerId: null,
+    pendingConnection: null,
     sessionIssueKeys: {},
     cursor: null,
   },
@@ -48,11 +52,12 @@ export const hydratablePeerStore =
 
 const $peerRuntimeStore = createStore<PeerRuntimeStoreState>({
   activePeerId: null,
+  activeConnectionId: null,
   sessionIssueKeys: {},
   sessionAgents: {},
 });
 
-const peerConnected = createEvent<string>();
+const peerConnected = createEvent<PeerConnection>();
 const peerSessionIssueKeySet = createEvent<{
   sessionId: string;
   issueKey: string;
@@ -78,6 +83,43 @@ $peerStore.on(feedEventReceived, (state, action) =>
     if (browserPeerReadyEvent) {
       state.cursor = { id: action.id, created_at: action.created_at };
       state.pendingPeerId = browserPeerReadyEvent.data.peerId;
+      state.pendingConnection = null;
+      return;
+    }
+
+    const browserRealtimeReadyEvent = z
+      .object({
+        event_type: z.literal("browser_realtime_ready"),
+        data: z.object({
+          connectionId: z.uuid(),
+          channelName: z.string(),
+          transport: z.literal("realtime"),
+          expiresAt: z.iso.datetime(),
+        }),
+      })
+      .safeParse(action).data;
+
+    if (browserRealtimeReadyEvent) {
+      const { connectionId, channelName, expiresAt } =
+        browserRealtimeReadyEvent.data;
+      const channelMatch = channelName.match(
+        /^forkhammer-worker-([0-9a-f-]{36})-([0-9a-f-]{36})$/i,
+      );
+      const validChannel =
+        !!channelMatch &&
+        z.uuid().safeParse(channelMatch[1]).success &&
+        z.uuid().safeParse(channelMatch[2]).success;
+
+      state.cursor = { id: action.id, created_at: action.created_at };
+      if (validChannel && Date.parse(expiresAt) > Date.now()) {
+        state.pendingConnection = {
+          transport: "realtime",
+          connectionId,
+          channelName,
+          expiresAt,
+        };
+        state.pendingPeerId = null;
+      }
       return;
     }
 
@@ -95,9 +137,12 @@ $peerStore.on(feedEventReceived, (state, action) =>
   }),
 );
 
-$peerRuntimeStore.on(peerConnected, (state, peerId) =>
+$peerRuntimeStore.on(peerConnected, (state, connection) =>
   produce(state, (state) => {
-    state.activePeerId = peerId;
+    state.activePeerId =
+      connection.transport === "webrtc" ? connection.peerId : null;
+    state.activeConnectionId =
+      connection.transport === "realtime" ? connection.connectionId : null;
   }),
 );
 
@@ -120,10 +165,26 @@ const effectRegisterPeerHandlers = createEffect(
 );
 
 const effectConnectPeer = createEffect(
-  async ({ ctx, peerId }: { ctx: WorkerContext; peerId: string }) => {
-    log("connecting to new peer", { peerId });
-    ctx.peerClient.connect(peerId);
-    return peerId;
+  async ({
+    ctx,
+    connection,
+  }: {
+    ctx: WorkerContext;
+    connection: PeerConnection;
+  }) => {
+    log("connecting to new peer", { connection });
+    if (connection.transport === "realtime") {
+      const userId = ctx.auth.activeTokenOrFail().getUserId();
+      const expectedPrefix = `forkhammer-worker-${userId}-`;
+      if (!connection.channelName.startsWith(expectedPrefix)) {
+        throw new Error("realtime-channel-user-mismatch");
+      }
+      if (Date.parse(connection.expiresAt) <= Date.now()) {
+        throw new Error("realtime-handshake-expired");
+      }
+    }
+    ctx.peerClient.connect(connection);
+    return connection;
   },
 );
 
@@ -141,8 +202,16 @@ sample({
     runtime: $peerRuntimeStore,
   },
   filter: ({ peer, runtime }) =>
-    !!peer.pendingPeerId && peer.pendingPeerId !== runtime.activePeerId,
-  fn: ({ peer }, { ctx }) => ({ ctx, peerId: peer.pendingPeerId as string }),
+    (!!peer.pendingPeerId && peer.pendingPeerId !== runtime.activePeerId) ||
+    (!!peer.pendingConnection &&
+      peer.pendingConnection.connectionId !== runtime.activeConnectionId),
+  fn: ({ peer }, { ctx }) => ({
+    ctx,
+    connection: peer.pendingConnection ?? {
+      transport: "webrtc",
+      peerId: peer.pendingPeerId as string,
+    },
+  }),
   target: effectConnectPeer,
 });
 

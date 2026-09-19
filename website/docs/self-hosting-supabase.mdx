@@ -80,3 +80,35 @@ Make sure:
 - The authenticated worker user can receive the inserts.
 
 The host CLI uses the same Supabase backend, but it runs outside Docker. It needs the same table access for queue operations, so its auth path must be allowed to `insert` new requests and `select` the rows it reads back.
+
+## Private worker channels
+
+For Realtime peer transport, the browser and worker authenticate as the same Supabase user. The browser channel name must have this form:
+
+```text
+forkhammer-worker-<user-id>-<random-uuid>
+```
+
+Enable private channels and add policies to `realtime.messages`:
+
+```sql
+create policy "users can receive their worker channel messages"
+on realtime.messages
+for select
+to authenticated
+using (
+  realtime.topic() like
+    'forkhammer-worker-' || (select auth.uid())::text || '-%'
+);
+
+create policy "users can send their worker channel messages"
+on realtime.messages
+for insert
+to authenticated
+with check (
+  realtime.topic() like
+    'forkhammer-worker-' || (select auth.uid())::text || '-%'
+);
+```
+
+These policies prevent a user from subscribing to or publishing on another user's worker channel. The worker still validates the handshake, channel format, connection ID, and expiry before joining.

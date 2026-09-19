@@ -51,7 +51,7 @@ export function createWorkerContext(
   const snapshots = EffectorSnapshotRepository.create({
     directory: workerConfig.worker.snapshots.directory,
   });
-  const peerClient = createPeerClient();
+  const peerClient = createPeerClient({ supabase });
 
   const jira = JiraClient.create(workerConfig.jira);
 

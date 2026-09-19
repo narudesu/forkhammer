@@ -1,5 +1,6 @@
 import debug from "debug";
 import { JSONRPCClient, JSONRPCServer } from "json-rpc-2.0";
+import type { SupabaseClient, RealtimeChannel } from "@supabase/supabase-js";
 import Peer, { type DataConnection } from "peerjs";
 import {
   PeerResolverMethod,
@@ -11,8 +12,17 @@ const log = debug("app:peer");
 
 type JsonRpcPayload = Record<string, unknown> | Array<Record<string, unknown>>;
 
+export type PeerConnection =
+  | { transport: "webrtc"; peerId: string }
+  | {
+      transport: "realtime";
+      connectionId: string;
+      channelName: string;
+      expiresAt: string;
+    };
+
 export interface PeerClient {
-  connect(peerId: string): void;
+  connect(connection: PeerConnection): void;
   disconnect(): void;
   request<T = unknown>(method: string, params?: unknown): Promise<T>;
   registerTarget(target: PeerResolverTarget): void;
@@ -23,11 +33,15 @@ export interface PeerClient {
 export function createPeerClient(options?: {
   peer?: Peer;
   createPeer?: () => Peer;
+  supabase?: SupabaseClient;
 }): PeerClient {
   let peerInstance: Peer | null = options?.peer ?? null;
   let peerEventsBound = false;
   const createPeer = options?.createPeer ?? createPeerInstance;
   let activeConnection: DataConnection | null = null;
+  let activeRealtimeChannel: RealtimeChannel | null = null;
+  let activeRealtimeConnectionId: string | null = null;
+  let realtimeHelloReceived = false;
   const disconnectHandlers: Array<() => void> = [];
   const sessionEventHandlers: Array<(event: SessionEvent) => void> = [];
   let pendingPeerId: string | null = null;
@@ -87,8 +101,12 @@ export function createPeerClient(options?: {
   }
 
   async function handleRpcPayload(payload: unknown): Promise<void> {
-    if (!isJsonRpcPayload(payload)) return;
+    if (!isJsonRpcPayload(payload)) {
+      log("invalid rpc payload", { payload });
+      return;
+    }
     const item = Array.isArray(payload) ? payload[0] : payload;
+    log("handling rpc payload", item);
     if (item && "method" in item) {
       if (item.method === PeerResolverMethod.sessionEvent) {
         for (const handler of sessionEventHandlers)
@@ -102,13 +120,93 @@ export function createPeerClient(options?: {
     rpcClient?.receive(payload as never);
   }
 
-  function connect(peerId: string): void {
+  function connect(connection: PeerConnection): void {
+    if (connection.transport === "realtime") {
+      connectRealtime(connection);
+      return;
+    }
+
     initPeerClient();
-    pendingPeerId = peerId;
+    pendingPeerId = connection.peerId;
+    void activeRealtimeChannel?.unsubscribe();
+    activeRealtimeChannel = null;
+    activeRealtimeConnectionId = null;
+    realtimeHelloReceived = false;
     if (activeConnection) activeConnection.close();
     if (!isPeerOpen(peerInstance)) return;
     pendingPeerId = null;
-    establishConnection(peerId);
+    establishConnection(connection.peerId);
+  }
+
+  function connectRealtime(
+    connection: Extract<PeerConnection, { transport: "realtime" }>,
+  ): void {
+    if (!options?.supabase) {
+      log("realtime peer transport requested without Supabase client");
+      return;
+    }
+
+    activeConnection?.close();
+    void activeRealtimeChannel?.unsubscribe();
+    activeRealtimeConnectionId = connection.connectionId;
+    realtimeHelloReceived = false;
+    const channel = options.supabase.channel(connection.channelName, {
+      config: { private: true },
+    });
+    activeRealtimeChannel = channel;
+
+    channel.on("broadcast", { event: "peer-message" }, ({ payload }) => {
+      if (activeRealtimeChannel !== channel) return;
+      if (!isRealtimeEnvelope(payload)) return;
+      if (payload.connectionId !== activeRealtimeConnectionId) return;
+      if (isTransportHello(payload.data)) {
+        if (payload.data.connectionId !== activeRealtimeConnectionId) return;
+        realtimeHelloReceived = true;
+        log("received hello");
+        return;
+      }
+      void handleRpcPayload(payload.data);
+    });
+
+    channel.subscribe((status) => {
+      if (activeRealtimeChannel !== channel) return;
+      log("realtime peer channel status %s", status);
+      if (status === "SUBSCRIBED" && activeRealtimeConnectionId) {
+        log("sending hello");
+        void sendRealtime(channel, {
+          connectionId: activeRealtimeConnectionId,
+          data: {
+            type: "transport-hello",
+            connectionId: activeRealtimeConnectionId,
+          },
+        });
+      }
+      if (status === "TIMED_OUT" || status === "CHANNEL_ERROR") {
+        realtimeHelloReceived = false;
+        activeRealtimeChannel = null;
+        void channel.unsubscribe();
+        if (Date.parse(connection.expiresAt) > Date.now()) {
+          setTimeout(() => {
+            if (
+              !activeRealtimeChannel &&
+              activeRealtimeConnectionId === connection.connectionId
+            ) {
+              connectRealtime(connection);
+            }
+          }, 0);
+        } else {
+          activeRealtimeConnectionId = null;
+          for (const handler of disconnectHandlers) handler();
+        }
+      }
+      if (status === "CLOSED") {
+        activeRealtimeChannel = null;
+        activeRealtimeConnectionId = null;
+        registeredTarget?.dispose();
+        rpcClient?.rejectAllPendingRequests("peer disconnected");
+        for (const handler of disconnectHandlers) handler();
+      }
+    });
   }
 
   function establishConnection(peerId: string): void {
@@ -122,13 +220,30 @@ export function createPeerClient(options?: {
 
   function disconnect(): void {
     activeConnection?.close();
+    void activeRealtimeChannel?.unsubscribe();
     registeredTarget?.dispose();
     activeConnection = null;
+    activeRealtimeChannel = null;
+    activeRealtimeConnectionId = null;
+    realtimeHelloReceived = false;
     rpcClient?.rejectAllPendingRequests("peer disconnected");
   }
 
   function send(payload: unknown): void {
-    if (activeConnection?.open) activeConnection.send(payload);
+    if (activeConnection?.open) {
+      activeConnection.send(payload);
+      return;
+    }
+    if (
+      activeRealtimeChannel &&
+      activeRealtimeConnectionId &&
+      realtimeHelloReceived
+    ) {
+      void sendRealtime(activeRealtimeChannel, {
+        connectionId: activeRealtimeConnectionId,
+        data: payload,
+      });
+    }
   }
 
   function request<T = unknown>(method: string, params?: unknown): Promise<T> {
@@ -200,6 +315,39 @@ export function createPeerClient(options?: {
     onSessionEvent,
     onDisconnect,
   };
+}
+
+async function sendRealtime(
+  channel: RealtimeChannel,
+  envelope: { connectionId: string; data: unknown },
+): Promise<void> {
+  await channel.send({
+    type: "broadcast",
+    event: "peer-message",
+    payload: envelope,
+  });
+}
+
+function isRealtimeEnvelope(
+  payload: unknown,
+): payload is { connectionId: string; data: unknown } {
+  return (
+    !!payload &&
+    typeof payload === "object" &&
+    typeof (payload as { connectionId?: unknown }).connectionId === "string" &&
+    "data" in payload
+  );
+}
+
+function isTransportHello(
+  data: unknown,
+): data is { type: "transport-hello"; connectionId: string } {
+  return (
+    !!data &&
+    typeof data === "object" &&
+    (data as { type?: unknown }).type === "transport-hello" &&
+    typeof (data as { connectionId?: unknown }).connectionId === "string"
+  );
 }
 
 function isJsonRpcPayload(payload: unknown): payload is JsonRpcPayload {
