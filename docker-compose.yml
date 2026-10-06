@@ -9,6 +9,9 @@ services:
         FORKHAMMER_USER: ${USER}
     container_name: forkhammer
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     ports:
       - "8000:8000"
     environment:
