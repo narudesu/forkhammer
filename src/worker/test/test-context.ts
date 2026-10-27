@@ -61,6 +61,7 @@ export function createTestContext(
         snapshots: {
           directory: "/tmp/forkhammer-test-snapshots",
         },
+        peer: { websocket: { port: 8787 } },
       },
     },
     supabase: testSupabaseClient.getSupabaseClient(),

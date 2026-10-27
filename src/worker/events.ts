@@ -93,6 +93,11 @@ const zBrowserPeerReadyData = z.object({
   peerId: z.string().min(1),
 });
 
+const zBrowserWebsocketTokenData = z.object({
+  token: z.string().min(32),
+  port: z.number().int().min(1).max(65535),
+});
+
 export const browserRealtimeReadyEventSchema = z.object({
   connectionId: z.uuid(),
   channelName: z
@@ -169,6 +174,12 @@ export const ultrafeedEventDefinitions = [
     dataSchema: zBrowserRealtimeReadyData,
   },
   {
+    eventType: "browser_websocket_token_issued",
+    description:
+      "A one-time token for connecting to the worker WebSocket server.",
+    dataSchema: zBrowserWebsocketTokenData,
+  },
+  {
     eventType: "artifact_refresh_requested",
     description: "A request to refresh a Jira inbox artifact snapshot.",
     dataSchema: zArtifactRefreshRequestedData,
@@ -185,6 +196,7 @@ export const ultrafeedEventSchemas = {
   issue_validation_failed: zIssueValidationFailedData,
   browser_peer_ready: zBrowserPeerReadyData,
   browser_realtime_ready: zBrowserRealtimeReadyData,
+  browser_websocket_token_issued: zBrowserWebsocketTokenData,
   artifact_refresh_requested: zArtifactRefreshRequestedData,
   inserted_artifact: zInsertedArtifactData,
 } as const;

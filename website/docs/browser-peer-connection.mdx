@@ -4,7 +4,7 @@ sidebar_position: 6
 
 # JSON-RPC peer integration
 
-Forkhammer uses **PeerJS** for signaling and a direct WebRTC data channel for communication. It uses [`json-rpc-2.0`](https://www.npmjs.com/package/json-rpc-2.0) on that channel to call worker methods.
+Forkhammer supports PeerJS/WebRTC, Supabase Realtime, and a worker-hosted WebSocket transport. All transports use [`json-rpc-2.0`](https://www.npmjs.com/package/json-rpc-2.0) to call worker methods.
 
 ## Connection flow
 
@@ -19,6 +19,26 @@ Forkhammer uses **PeerJS** for signaling and a direct WebRTC data channel for co
 4. On `connection`, the browser keeps the data connection open and sends JSON-RPC messages.
 
 PeerJS is only used for signaling. After the connection opens, requests and responses travel directly between the two peers.
+
+## Worker-hosted WebSocket
+
+The worker listens on the port configured by `[worker.peer.websocket].port` (default `8787`). It publishes a `browser_websocket_token_issued` event to the configured feed table containing a cryptographically random, single-use token and port. After a connected client disconnects, the worker publishes a fresh token; use the newest token event in the feed. Configure your network/firewall to expose this port, preferably through a TLS-terminating reverse proxy, and connect the browser to:
+
+```text
+wss://your-worker-host/peer?token=<token-from-feed-event>
+```
+
+For local development without TLS, use `ws://localhost:8787/peer?token=...`. The token is consumed at successful WebSocket upgrade; a second connection attempt with it is rejected. Previous token events remain in the append-only feed history, but their tokens are no longer accepted. Anyone with feed access can read the token, so treat feed access as credential access and use `wss://` outside local development.
+
+After connecting, send and receive the same JSON-RPC messages documented below. Session updates are JSON-RPC notifications.
+
+To smoke-test the endpoint from the Forkhammer repository, pass the full URL (including a fresh token) to:
+
+```bash
+bun run test:peer-websocket -- 'wss://your-worker-host/peer?token=<token-from-feed-event>'
+```
+
+The script sends a `get-config` JSON-RPC request and exits successfully when it receives a response. Since the token is single-use, get a new feed token for each test run.
 
 ## JSON-RPC messages
 

@@ -62,6 +62,15 @@ const zConfig = z.object({
     snapshots: z.object({
       directory: z.string().min(1),
     }),
+    peer: z
+      .object({
+        websocket: z
+          .object({
+            port: z.number().int().min(1).max(65535).default(8787),
+          })
+          .default({ port: 8787 }),
+      })
+      .default({ websocket: { port: 8787 } }),
   }),
   supabase: z
     .object({

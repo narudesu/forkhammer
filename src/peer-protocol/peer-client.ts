@@ -23,6 +23,12 @@ export type PeerConnection =
 
 export interface PeerClient {
   connect(connection: PeerConnection): void;
+  acceptWebSocket(socket: {
+    send(data: string): void;
+    close(): void;
+    onMessage(handler: (message: string) => void): void;
+    onClose(handler: () => void): void;
+  }): void;
   disconnect(): void;
   request<T = unknown>(method: string, params?: unknown): Promise<T>;
   registerTarget(target: PeerResolverTarget): void;
@@ -39,6 +45,8 @@ export function createPeerClient(options?: {
   let peerEventsBound = false;
   const createPeer = options?.createPeer ?? createPeerInstance;
   let activeConnection: DataConnection | null = null;
+  let activeWebSocket: { send(data: string): void; close(): void } | null =
+    null;
   let activeRealtimeChannel: RealtimeChannel | null = null;
   let activeRealtimeConnectionId: string | null = null;
   let realtimeHelloReceived = false;
@@ -118,6 +126,36 @@ export function createPeerClient(options?: {
       return;
     }
     rpcClient?.receive(payload as never);
+  }
+
+  function acceptWebSocket(socket: {
+    send(data: string): void;
+    close(): void;
+    onMessage(handler: (message: string) => void): void;
+    onClose(handler: () => void): void;
+  }): void {
+    activeConnection?.close();
+    void activeRealtimeChannel?.unsubscribe();
+    activeRealtimeChannel = null;
+    activeRealtimeConnectionId = null;
+    activeConnection = null;
+    activeWebSocket?.close();
+    activeWebSocket = socket;
+    registeredTarget?.dispose();
+    socket.onMessage((message) => {
+      try {
+        void handleRpcPayload(JSON.parse(message));
+      } catch {
+        log("invalid websocket JSON message");
+      }
+    });
+    socket.onClose(() => {
+      if (activeWebSocket !== socket) return;
+      activeWebSocket = null;
+      registeredTarget?.dispose();
+      rpcClient?.rejectAllPendingRequests("peer disconnected");
+      for (const handler of disconnectHandlers) handler();
+    });
   }
 
   function connect(connection: PeerConnection): void {
@@ -220,6 +258,8 @@ export function createPeerClient(options?: {
 
   function disconnect(): void {
     activeConnection?.close();
+    activeWebSocket?.close();
+    activeWebSocket = null;
     void activeRealtimeChannel?.unsubscribe();
     registeredTarget?.dispose();
     activeConnection = null;
@@ -230,6 +270,10 @@ export function createPeerClient(options?: {
   }
 
   function send(payload: unknown): void {
+    if (activeWebSocket) {
+      activeWebSocket.send(JSON.stringify(payload));
+      return;
+    }
     if (activeConnection?.open) {
       activeConnection.send(payload);
       return;
@@ -309,6 +353,7 @@ export function createPeerClient(options?: {
 
   return {
     connect,
+    acceptWebSocket,
     disconnect,
     request,
     registerTarget,

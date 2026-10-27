@@ -8,6 +8,7 @@
     "build:docs": "node ./scripts/docusaurus.mjs build website",
     "postinstall": "true",
     "test": "bun test",
+    "test:peer-websocket": "bun run scripts/test-peer-websocket.ts",
     "ts": "tsc --noEmit",
     "dev": "bun run ./src/run-cli.ts",
     "docs:start": "node ./scripts/docusaurus.mjs start website",

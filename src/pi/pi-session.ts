@@ -45,7 +45,7 @@ export abstract class PiSessionGateway {
     const model = getBuiltinModel(
       // @ts-expect-error
       opts.agentConfig?.default_provider_id ?? "openai-codex",
-      opts.agentConfig?.default_model_id ?? "gpt-6.1-luna",
+      opts.agentConfig?.default_model_id ?? "gpt-6-luna",
     );
 
     const { session } = await createAgentSession({

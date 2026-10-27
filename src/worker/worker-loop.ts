@@ -3,13 +3,18 @@ import { RETRY_DELAY_MS } from "src/worker/constants";
 import type { WorkerContext } from "src/worker/context/types";
 import { runRealtimeSubscriptionRound } from "src/worker/realtime/realtime-round";
 import { sleepMs } from "src/worker/sleep";
+import { startPeerWebSocketServer } from "src/worker/peer/peer-websocket-server";
 
 export async function runWorkerLoop(ctx: WorkerContext) {
   ctx.log.debug("started worker loop");
+  let peerWebSocketServer: ReturnType<typeof Bun.serve> | null = null;
   while (true) {
     try {
       await ctx.auth.login();
       ctx.log.debug("logged in");
+      if (!peerWebSocketServer) {
+        peerWebSocketServer = await startPeerWebSocketServer(ctx);
+      }
 
       await runRealtimeSubscriptionRound(ctx);
 
