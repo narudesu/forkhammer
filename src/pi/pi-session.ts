@@ -4,6 +4,8 @@ import {
   createAgentSession,
   type SessionManager,
   DefaultResourceLoader,
+  createCodemodeExtension,
+  createMcpExtension,
 } from "@earendil-works/pi-coding-agent";
 import type { Config } from "src/config/config";
 import { resolvePiAgentDir } from "src/pi/pi-agent-dir";
@@ -24,11 +26,18 @@ export abstract class PiSessionGateway {
     const cwd = opts.directory;
 
     const agentDir = resolvePiAgentDir();
+    // Pi's MCP extension resolves mcp.json via getAgentDir(), independently of
+    // the agentDir passed to createAgentSession/DefaultResourceLoader.
+    process.env.PI_CODING_AGENT_DIR ??= agentDir;
 
     const resourceLoader = new DefaultResourceLoader({
       cwd,
       agentDir,
-      extensionFactories: [(pi) => opts.planTool?.register(pi)],
+      extensionFactories: [
+        createCodemodeExtension({ mode: "on" }),
+        createMcpExtension(),
+        (pi) => opts.planTool?.register(pi),
+      ],
     });
 
     await resourceLoader.reload();
@@ -36,7 +45,7 @@ export abstract class PiSessionGateway {
     const model = getBuiltinModel(
       // @ts-expect-error
       opts.agentConfig?.default_provider_id ?? "openai-codex",
-      opts.agentConfig?.default_model_id ?? "gpt-5.6-luna",
+      opts.agentConfig?.default_model_id ?? "gpt-6.1-luna",
     );
 
     const { session } = await createAgentSession({
@@ -47,15 +56,22 @@ export abstract class PiSessionGateway {
       tools:
         opts.mode === "write"
           ? undefined
-          : ["read", "grep", "find", "ls", opts?.planTool?.toolName].filter(
-              (item) => item != null,
-            ),
+          : [
+              "read",
+              "grep",
+              "find",
+              "ls",
+              "codemode",
+              opts?.planTool?.toolName,
+            ].filter((item) => item != null),
       agentDir,
       cwd,
       resourceLoader,
       sessionManager: opts.sessionManager,
       model,
     });
+
+    await session.bindExtensions({});
 
     return {
       session,
