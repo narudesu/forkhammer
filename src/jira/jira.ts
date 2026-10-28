@@ -1,4 +1,6 @@
 import toml from "smol-toml";
+import type { JiraIssueDetail } from "src/peer-protocol/peer-protocol";
+import { getJiraIssueDetail } from "./jira-issue-detail";
 import type z from "zod";
 import type { Config } from "../config/config";
 import {
@@ -10,6 +12,9 @@ import {
 } from "src/jira/jira-types";
 
 export abstract class JiraClient {
+  abstract getJiraIssue(opts: {
+    issueKey: string;
+  }): Promise<JiraIssueDetail | null>;
   abstract getJiraInboxIssues(): Promise<JiraInboxIssue[]>;
   abstract getIssueContext(opts: { issueKey: string }): Promise<IssueContext>;
 
@@ -18,6 +23,7 @@ export abstract class JiraClient {
 
 function createClient(config: NonNullable<Config["jira"]>): JiraClient {
   return {
+    getJiraIssue: ({ issueKey }) => getJiraIssueDetail(config, issueKey),
     async getJiraInboxIssues() {
       const filterId = config.filters?.inbox?.filter_id;
       if (!filterId) {

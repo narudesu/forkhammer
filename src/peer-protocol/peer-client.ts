@@ -1,9 +1,16 @@
 import debug from "debug";
-import { JSONRPCClient, JSONRPCServer } from "json-rpc-2.0";
+import {
+  JSONRPCClient,
+  JSONRPCServer,
+  JSONRPCErrorException,
+} from "json-rpc-2.0";
+import { Value } from "@sinclair/typebox/value";
 import type { SupabaseClient, RealtimeChannel } from "@supabase/supabase-js";
 import Peer, { type DataConnection } from "peerjs";
 import {
   PeerResolverMethod,
+  GetJiraIssueParamsSchema,
+  GetJiraIssueResultSchema,
   type PeerResolverTarget,
   type SessionEvent,
 } from "src/peer-protocol/peer-protocol";
@@ -303,6 +310,22 @@ export function createPeerClient(options?: {
 
   function registerTarget(target: PeerResolverTarget): void {
     registeredTarget = target;
+    rpcServer.addMethod(PeerResolverMethod.getJiraIssue, async (params) => {
+      if (!Value.Check(GetJiraIssueParamsSchema, params)) {
+        throw new JSONRPCErrorException(
+          "Invalid get-jira-issue parameters",
+          -32602,
+        );
+      }
+      const result = await target.getJiraIssue(params);
+      if (!Value.Check(GetJiraIssueResultSchema, result)) {
+        throw new JSONRPCErrorException(
+          "Invalid get-jira-issue response",
+          -32603,
+        );
+      }
+      return result;
+    });
     rpcServer.addMethod(PeerResolverMethod.getConfig, () => target.getConfig());
     rpcServer.addMethod(PeerResolverMethod.listWorktrees, (params) =>
       target.listWorktrees(params as never),

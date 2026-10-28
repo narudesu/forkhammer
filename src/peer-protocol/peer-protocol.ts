@@ -1,6 +1,32 @@
 import { type Static, Type } from "@sinclair/typebox";
 
 /** Shared API contract. Keep this module independent of worker/server code. */
+/** Markdown bodies; worker fetches every comment page, oldest first. */
+export const GetJiraIssueParamsSchema = Type.Object({
+  issueKey: Type.String({ minLength: 1 }),
+});
+export const JiraIssueDetailSchema = Type.Object({
+  key: Type.String({ minLength: 1 }),
+  summary: Type.String(),
+  assignee: Type.Union([Type.String(), Type.Null()]),
+  priority: Type.Union([Type.String(), Type.Null()]),
+  description: Type.String(),
+  comments: Type.Array(
+    Type.Object({
+      id: Type.String(),
+      author: Type.String(),
+      createdAt: Type.String(),
+      body: Type.String(),
+    }),
+  ),
+});
+export const GetJiraIssueResultSchema = Type.Object({
+  issue: Type.Union([JiraIssueDetailSchema, Type.Null()]),
+});
+export type JiraIssueDetail = Static<typeof JiraIssueDetailSchema>;
+export type GetJiraIssueParams = Static<typeof GetJiraIssueParamsSchema>;
+export type GetJiraIssueResult = Static<typeof GetJiraIssueResultSchema>;
+
 export const ProjectSchema = Type.Object({
   name: Type.String(),
   key: Type.Optional(Type.String()),
@@ -178,6 +204,7 @@ export type UnsubscribeSessionResult = Static<
 export type ArchiveSessionResult = Static<typeof ArchiveSessionResultSchema>;
 
 export const PeerResolverMethod = {
+  getJiraIssue: "get-jira-issue",
   getConfig: "get-config",
   listWorktrees: "list-worktrees",
   listSessions: "list-sessions",
@@ -198,6 +225,7 @@ export type PeerResolverMethodName =
 export interface PeerResolverTarget {
   peerId: string;
   dispose(): void;
+  getJiraIssue(params: GetJiraIssueParams): Promise<GetJiraIssueResult>;
   getConfig(): Promise<GetConfigResult>;
   listWorktrees(params: ListWorktreesParams): Promise<ListWorktreesResult>;
   listSessions(params: ListSessionsParams): Promise<ListSessionsResult>;
@@ -219,6 +247,7 @@ export interface PeerResolverTarget {
 }
 
 export type PeerResolverParams =
+  | GetJiraIssueParams
   | ListWorktreesParams
   | ListSessionsParams
   | ListRecentProjectSessionsParams

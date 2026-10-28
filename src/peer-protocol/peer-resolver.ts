@@ -52,7 +52,7 @@ export function createPeerResolverTarget(
   }
 
   function emitActiveChange(
-    subscription: (typeof subscriptions extends Map<string, infer T> ? T : never),
+    subscription: typeof subscriptions extends Map<string, infer T> ? T : never,
     sessionPath: string,
   ): void {
     const active = subscription.session.isStreaming;
@@ -84,6 +84,10 @@ export function createPeerResolverTarget(
   return {
     peerId: context.workerConfig.worker.id ?? "",
     dispose,
+    async getJiraIssue(params) {
+      return { issue: await context.jira.getJiraIssue(params) };
+    },
+
     async getConfig(): Promise<GetConfigResult> {
       const projects: Project[] = Object.entries(
         context.workerConfig.project,
