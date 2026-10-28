@@ -18,6 +18,10 @@ auth = "email@example.com:api_token"
 [jira.filters.inbox]
 # filter_id = "12345"
 
+[worker]
+# stable worker identity, unique per installation
+id = "my-worker"
+
 [worker.snapshots]
 # local folder used by the worker for event-sourced projection snapshots
 directory = "/home/you/.local/state/forkhammer/snapshots"

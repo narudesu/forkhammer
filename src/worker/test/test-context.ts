@@ -58,6 +58,7 @@ export function createTestContext(
         },
       },
       worker: {
+        id: "test-worker",
         snapshots: {
           directory: "/tmp/forkhammer-test-snapshots",
         },

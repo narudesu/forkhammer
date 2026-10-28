@@ -4,6 +4,9 @@ import { parseConfig } from "./config";
 describe("artifact configuration", () => {
   test("parses GitLab projects, blocker file, and healthchecks", () => {
     const config = parseConfig(`
+      [worker]
+      id = "test-worker"
+
       [worker.snapshots]
       directory = "/tmp/snapshots"
 

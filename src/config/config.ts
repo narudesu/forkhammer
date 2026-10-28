@@ -59,6 +59,7 @@ const zConfig = z.object({
     .optional(),
   project: z.record(z.string(), zProjectConfig).optional(),
   worker: z.object({
+    id: z.string().min(1),
     snapshots: z.object({
       directory: z.string().min(1),
     }),

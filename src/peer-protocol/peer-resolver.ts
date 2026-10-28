@@ -82,12 +82,16 @@ export function createPeerResolverTarget(
   }
 
   return {
+    peerId: context.workerConfig.worker.id ?? "",
     dispose,
     async getConfig(): Promise<GetConfigResult> {
       const projects: Project[] = Object.entries(
         context.workerConfig.project,
       ).map(([name, config]) => ({ name, key: config.key, root: config.root }));
-      return { projects };
+      return {
+        workerId: context.workerConfig.worker.id,
+        projects,
+      };
     },
 
     async listWorktrees(

@@ -36,6 +36,8 @@ export const SessionEntrySchema = Type.Intersect([
 ]);
 
 export const GetConfigResultSchema = Type.Object({
+  // Persisted installation identity supplied by the worker; never a connection ID.
+  workerId: Type.Optional(Type.String({ minLength: 1 })),
   projects: Type.Array(ProjectSchema),
 });
 
@@ -194,6 +196,7 @@ export type PeerResolverMethodName =
   (typeof PeerResolverMethod)[keyof typeof PeerResolverMethod];
 
 export interface PeerResolverTarget {
+  peerId: string;
   dispose(): void;
   getConfig(): Promise<GetConfigResult>;
   listWorktrees(params: ListWorktreesParams): Promise<ListWorktreesResult>;
