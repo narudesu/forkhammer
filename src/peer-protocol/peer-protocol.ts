@@ -1,5 +1,12 @@
 import { type Static, Type } from "@sinclair/typebox";
 
+import type {
+  DiffRequest,
+  DiffResult,
+  BranchListParams,
+  BranchList,
+} from "./diff-contract";
+
 /** Shared API contract. Keep this module independent of worker/server code. */
 /** Markdown bodies; worker fetches every comment page, oldest first. */
 export const GetJiraIssueParamsSchema = Type.Object({
@@ -117,6 +124,9 @@ export const CreateWorktreeResultSchema = Type.Object({
 export const CreateSessionParamsSchema = Type.Object({
   worktreePath: Type.String({ minLength: 1 }),
   name: Type.Optional(Type.String({ minLength: 1 })),
+  mode: Type.Optional(
+    Type.Union([Type.Literal("read"), Type.Literal("write")]),
+  ),
 });
 export const CreateSessionResultSchema = Type.Object({
   path: Type.String(),
@@ -206,6 +216,8 @@ export type ArchiveSessionResult = Static<typeof ArchiveSessionResultSchema>;
 export const PeerResolverMethod = {
   getJiraIssue: "get-jira-issue",
   getConfig: "get-config",
+  listDiffBranches: "list-diff-branches",
+  getDiff: "get-diff",
   listWorktrees: "list-worktrees",
   listSessions: "list-sessions",
   listRecentProjectSessions: "list-recent-project-sessions",
@@ -227,6 +239,8 @@ export interface PeerResolverTarget {
   dispose(): void;
   getJiraIssue(params: GetJiraIssueParams): Promise<GetJiraIssueResult>;
   getConfig(): Promise<GetConfigResult>;
+  listDiffBranches(params: BranchListParams): Promise<BranchList>;
+  getDiff(params: DiffRequest): Promise<DiffResult>;
   listWorktrees(params: ListWorktreesParams): Promise<ListWorktreesResult>;
   listSessions(params: ListSessionsParams): Promise<ListSessionsResult>;
   listRecentProjectSessions(

@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { createDiffHandlers } from "./diff-review";
 import os from "node:os";
 import path from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
@@ -84,6 +85,7 @@ export function createPeerResolverTarget(
   return {
     peerId: context.workerConfig.worker.id ?? "",
     dispose,
+    ...createDiffHandlers(context.workerConfig),
     async getJiraIssue(params) {
       return { issue: await context.jira.getJiraIssue(params) };
     },
@@ -264,6 +266,7 @@ export function createPeerResolverTarget(
         directory: manager.getCwd(),
         agentConfig: context.workerConfig.agent,
         sessionManager: manager,
+        mode: params.mode,
       });
 
       await sessionGw.init();

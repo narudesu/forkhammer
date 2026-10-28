@@ -309,6 +309,12 @@ export function createPeerClient(options?: {
   }
 
   function registerTarget(target: PeerResolverTarget): void {
+    rpcServer.addMethod(PeerResolverMethod.listDiffBranches, (params) =>
+      target.listDiffBranches(params),
+    );
+    rpcServer.addMethod(PeerResolverMethod.getDiff, (params) =>
+      target.getDiff(params),
+    );
     registeredTarget = target;
     rpcServer.addMethod(PeerResolverMethod.getJiraIssue, async (params) => {
       if (!Value.Check(GetJiraIssueParamsSchema, params)) {
